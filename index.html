@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HD Interna</title>
+  <meta name="description" content="App interna de HD Máquinas Ópticas">
+  <meta name="theme-color" content="#0f4c81">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="demo-banner">Versión de prueba: los datos son de ejemplo y quedan guardados solo en este navegador.</div>
+  <header id="topbar" hidden>
+    <button id="menu-btn" class="icon-btn" aria-label="Abrir menú">☰</button>
+    <span class="brand">HD Interna</span>
+    <span id="user-chip"></span>
+  </header>
+  <nav id="sidenav" hidden></nav>
+  <main id="app"></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="js/permisos.js"></script>
+  <script src="js/datos.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
