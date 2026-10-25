@@ -59,7 +59,7 @@ const PERMISOS = {
 
   // Recibos de sueldo
   verRecibosDe: (u, otro) => esDirector(u) || u.rol === 'sub_admin' || u.id === otro.id,
-  subirRecibos: u => u.rol === 'sub_admin',
+  subirRecibos: u => esDirector(u),
 
   // Usuarios y configuración
   administrarUsuarios: u => esDirector(u),
