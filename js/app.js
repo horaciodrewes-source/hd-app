@@ -2,6 +2,9 @@
 
 // ---------- Utilidades ----------
 
+// Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
+const VERSION = '2026.10.25';
+
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -197,7 +200,7 @@ function render() {
     const cab = r.seccion !== secc ? `<div class="nav-section">${(secc = r.seccion)}</div>` : '';
     const extra = r.id === 'aprobaciones' && pend ? ` <span class="badge warn">${pend}</span>` : '';
     return `${cab}<a href="#${r.id}" class="${r === actual ? 'active' : ''}">${esc(r.titulo)}${extra}</a>`;
-  }).join('') + `<div class="nav-section">Sesión</div><a href="#" id="salir">Salir (${esc(nombreCorto(yo.id))})</a>`;
+  }).join('') + `<div class="nav-section">Sesión</div><a href="#" id="salir">Salir (${esc(nombreCorto(yo.id))})</a><div class="nav-section">Versión ${VERSION}</div>`;
   $('#salir').onclick = e => { e.preventDefault(); cerrarSesion(); };
   nav.classList.remove('open');
 
