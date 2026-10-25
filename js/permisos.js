@@ -58,7 +58,7 @@ const PERMISOS = {
     r.categoria === 'garantias' ? u.rol === 'sub_ventas' : (esDirector(u) || u.rol === 'sub_admin'),
 
   // Recibos de sueldo
-  verRecibosDe: (u, otro) => esDirector(u) || u.rol === 'sub_admin' || u.id === otro.id,
+  verRecibosDe: (u, otro) => esDirector(u) || u.id === otro.id,
   subirRecibos: u => esDirector(u),
 
   // Usuarios y configuración
