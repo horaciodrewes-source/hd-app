@@ -111,7 +111,7 @@ const DB = {
     this.guardar();
   },
   guardar() {
-    try { localStorage.setItem(CLAVE, JSON.stringify(this._datos)); } catch (e) { /* sin almacenamiento: los datos duran hasta recargar */ }
+    try { localStorage.setItem(CLAVE, JSON.stringify(this._datos)); return true; } catch (e) { return false; /* sin lugar: los datos duran hasta recargar */ }
   },
   reiniciar() {
     this._datos = datosIniciales();

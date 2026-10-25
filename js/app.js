@@ -769,28 +769,135 @@ conectar.recordatorios = () => {
 
 // ---------- Recibos de sueldo ----------
 
+// El contador manda un solo PDF por mes con una página por empleado.
+// La app lee el nombre escrito en cada página y la guarda como recibo de esa persona.
+
+const normalizar = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+function nombreArchivoRecibo(uid, mes) {
+  const partes = nombre(uid).normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/);
+  const apellido = partes.length >= 4 ? partes.slice(-2).join('') : partes[partes.length - 1];
+  const mesNombre = MESES[Number(mes.slice(5)) - 1];
+  return `${mes}-${mesNombre[0].toUpperCase() + mesNombre.slice(1)}-${partes[0]}${apellido}.pdf`;
+}
+// Una página es de una persona si en su texto aparecen todas las palabras de su nombre
+function detectarEmpleado(textoPagina) {
+  const texto = normalizar(textoPagina);
+  const candidatos = usuariosActivos().filter(u => u.rol !== 'director' &&
+    normalizar(u.nombre).split(/\s+/).every(palabra => texto.includes(palabra)));
+  return candidatos.length === 1 ? candidatos[0].id : '';
+}
+function descargar(nombreArchivo, url) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  a.click();
+}
+function urlDeDataURL(dataURL) {
+  const [cab, b64] = dataURL.split(',');
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return URL.createObjectURL(new Blob([bytes], { type: cab.slice(5).split(';')[0] }));
+}
+const aDataURL = bytes => new Promise(ok => {
+  const r = new FileReader();
+  r.onload = () => ok(r.result);
+  r.readAsDataURL(new Blob([bytes], { type: 'application/pdf' }));
+});
+
+let reciboEnProceso = null; // { mes, bytes, paginas: [{ numero, usuario }] }
+
 function vistaRecibos() {
   const visibles = DB.todos('recibos').filter(r => usuario(r.usuario) && puede(yo, 'verRecibosDe', usuario(r.usuario))).sort((a, b) => b.mes.localeCompare(a.mes));
+  const mesAnterior = sumarDias(hoyISO().slice(0, 8) + '01', -1).slice(0, 7);
+  const p = reciboEnProceso;
   return `<h1>Recibos de sueldo</h1>
   <div class="card table-wrap"><table>
     <thead><tr><th>Mes</th><th>Persona</th><th></th></tr></thead>
     <tbody>${visibles.map(r => `<tr><td>${MESES[Number(r.mes.slice(5)) - 1]} ${r.mes.slice(0, 4)}</td><td>${esc(nombre(r.usuario))}</td>
-      <td><a class="btn" href="${esc(r.link)}" target="_blank" rel="noopener">Abrir</a></td></tr>`).join('') || '<tr><td colspan="3" class="muted">Todavía no hay recibos cargados.</td></tr>'}</tbody>
+      <td><button data-abrir="${r.id}">Descargar</button></td></tr>`).join('') || '<tr><td colspan="3" class="muted">Todavía no hay recibos cargados.</td></tr>'}</tbody>
   </table></div>
-  ${puede(yo, 'subirRecibos') ? `<div class="card"><h3>Cargar recibo</h3>
-    <p class="muted">Guardá el PDF en Google Drive, compartilo solo con esa persona y pegá el link.</p>
-    <form class="stack" id="form-recibo"><div class="grid">
-      <label>Persona <select name="usuario">${opciones(usuariosActivos().map(u => [u.id, u.nombre]))}</select></label>
-      <label>Mes <input type="month" name="mes" required></label>
-      <label>Link <input type="url" name="link" required></label>
-    </div><div><button class="primary">Cargar</button></div></form></div>` : ''}`;
+  ${puede(yo, 'subirRecibos') ? `<div class="card"><h3>Cargar el PDF del contador</h3>
+    <p class="muted">Subí el PDF tal como lo manda Alcalá, con todos los recibos juntos. La app separa las páginas, reconoce a quién es cada una por el nombre y se lo muestra solo a esa persona.</p>
+    <form class="stack" id="form-recibos"><div class="grid">
+      <label>Mes de los recibos <input type="month" name="mes" required value="${p?.mes || mesAnterior}"></label>
+      <label>PDF de Alcalá <input type="file" name="pdf" accept="application/pdf" required></label>
+    </div><div><button class="primary">Separar recibos</button></div></form>
+    <div id="msg-recibos"></div>
+    ${p ? `<h3 style="margin-top:16px">Revisá antes de guardar</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Página</th><th>Es de</th><th>Se guarda como</th></tr></thead>
+        <tbody>${p.paginas.map((pg, i) => `<tr><td>${pg.numero}</td>
+          <td><select data-pagina="${i}"><option value="">— no cargar —</option>${opciones(usuariosActivos().filter(u => u.rol !== 'director').map(u => [u.id, u.nombre]), pg.usuario)}</select>
+          ${pg.usuario ? '' : '<div class="notice warn">No se reconoció el nombre. Elegí a quién corresponde.</div>'}</td>
+          <td><small>${pg.usuario ? esc(nombreArchivoRecibo(pg.usuario, p.mes)) : ''}</small></td></tr>`).join('')}</tbody>
+      </table></div>
+      <div class="row" style="margin-top:12px"><button class="primary" id="guardar-recibos">Guardar recibos</button>
+      <button id="descargar-recibos">Descargarlos también (para Drive)</button><button id="cancelar-recibos">Cancelar</button></div>` : ''}
+  </div>` : ''}`;
 }
+
+async function separarPaginas(bytes, numeros) {
+  const original = await PDFLib.PDFDocument.load(bytes);
+  const salida = [];
+  for (const n of numeros) {
+    const doc = await PDFLib.PDFDocument.create();
+    const [pagina] = await doc.copyPages(original, [n - 1]);
+    doc.addPage(pagina);
+    salida.push(await doc.save());
+  }
+  return salida;
+}
+
 conectar.recibos = () => {
-  const f = $('#form-recibo');
-  if (f) f.onsubmit = e => {
+  document.querySelectorAll('[data-abrir]').forEach(b => b.onclick = () => {
+    const r = DB.buscar('recibos', b.dataset.abrir);
+    if (r.archivo) descargar(r.nombreArchivo || 'recibo.pdf', urlDeDataURL(r.archivo));
+    else if (r.link) window.open(r.link, '_blank', 'noopener');
+  });
+  const f = $('#form-recibos');
+  if (!f) return;
+  const msg = $('#msg-recibos');
+  f.onsubmit = async e => {
     e.preventDefault();
-    DB.agregar('recibos', { ...datosForm(f), subio: yo.id });
-    toast('Recibo cargado');
+    if (!window.pdfjsLib || !window.PDFLib) { msg.innerHTML = '<div class="notice bad">No se pudo cargar el lector de PDF. Revisá la conexión.</div>'; return; }
+    msg.innerHTML = '<div class="notice info">Leyendo el PDF…</div>';
+    try {
+      const bytes = new Uint8Array(await f.pdf.files[0].arrayBuffer());
+      const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+      const paginas = [];
+      for (let n = 1; n <= doc.numPages; n++) {
+        const contenido = await (await doc.getPage(n)).getTextContent();
+        paginas.push({ numero: n, usuario: detectarEmpleado(contenido.items.map(i => i.str).join(' ')) });
+      }
+      reciboEnProceso = { mes: f.mes.value, bytes, paginas };
+      render();
+    } catch (err) {
+      msg.innerHTML = '<div class="notice bad">No se pudo leer ese archivo. ¿Es el PDF de los recibos?</div>';
+    }
+  };
+  document.querySelectorAll('[data-pagina]').forEach(s => s.onchange = () => {
+    reciboEnProceso.paginas[Number(s.dataset.pagina)].usuario = s.value;
+    render();
+  });
+  const elegidas = () => reciboEnProceso.paginas.filter(pg => pg.usuario);
+  if ($('#cancelar-recibos')) $('#cancelar-recibos').onclick = () => { reciboEnProceso = null; render(); };
+  if ($('#descargar-recibos')) $('#descargar-recibos').onclick = async () => {
+    const pags = elegidas();
+    const archivos = await separarPaginas(reciboEnProceso.bytes, pags.map(pg => pg.numero));
+    archivos.forEach((bytes, i) => descargar(nombreArchivoRecibo(pags[i].usuario, reciboEnProceso.mes),
+      URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))));
+  };
+  if ($('#guardar-recibos')) $('#guardar-recibos').onclick = async () => {
+    const pags = elegidas();
+    if (!pags.length) { toast('No hay páginas asignadas a nadie'); return; }
+    const { mes } = reciboEnProceso;
+    const archivos = await separarPaginas(reciboEnProceso.bytes, pags.map(pg => pg.numero));
+    for (let i = 0; i < pags.length; i++) {
+      const previo = DB.todos('recibos').find(r => r.usuario === pags[i].usuario && r.mes === mes);
+      if (previo) DB.borrar('recibos', previo.id);
+      DB.agregar('recibos', { usuario: pags[i].usuario, mes, nombreArchivo: nombreArchivoRecibo(pags[i].usuario, mes), archivo: await aDataURL(archivos[i]), subio: yo.id });
+    }
+    reciboEnProceso = null;
+    toast(DB.guardar() ? `${pags.length} recibos guardados` : 'Atención: el navegador no tiene lugar para guardarlos');
     render();
   };
 };
