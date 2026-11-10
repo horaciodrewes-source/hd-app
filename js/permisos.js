@@ -21,38 +21,39 @@ const mismoSector = (u, otro) => otro && u.sector === otro.sector;
 
 const PERMISOS = {
   // Asistencia
-  verAsistenciaDe: (u, otro) =>
-    esDirector(u) || u.rol === 'sub_admin' || u.id === otro.id ||
-    (u.rol === 'sub_ventas' && mismoSector(u, otro)),
-  exportarAsistencia: u => esDirector(u) || u.rol === 'sub_admin',
-  aprobarCorreccion: u => esDirector(u) || u.rol === 'sub_admin',
+  // Por ahora (mapa del 09/11/2026): cada uno ve solo la suya y Horacio ve la de todos.
+  verAsistenciaDe: (u, otro) => esDirector(u) || u.id === otro.id,
+  exportarAsistencia: u => esDirector(u),
+  aprobarCorreccion: u => esDirector(u),
 
   // Ausencias y licencias
-  aprobarAusenciaDe: (u, otro) =>
-    esDirector(u) || (esSub(u) && u.id !== otro.id && mismoSector(u, otro)),
+  // Por ahora aprueba solo Horacio (más adelante se suma Lucas para su sector).
+  aprobarAusenciaDe: u => esDirector(u),
 
-  // Vacaciones: Lucas aprueba la etapa de sector, Horacio da la decisión final
-  aprobarVacacionesSectorDe: (u, otro) => u.rol === 'sub_ventas' && u.id !== otro.id && mismoSector(u, otro),
+  // Vacaciones: por ahora una sola etapa, la de Horacio.
+  // Más adelante: (u, otro) => u.rol === 'sub_ventas' && u.id !== otro.id && mismoSector(u, otro)
+  aprobarVacacionesSectorDe: () => false,
   aprobarVacacionesFinal: u => esDirector(u),
 
   // Precios
+  verPrecios: u => u.id !== 'gustavo',
   editarPrecios: u => esDirector(u),
-  verCostos: u => esDirector(u) || u.rol === 'sub_admin',
 
   // Material
-  subirMaterial: u => esDirector(u) || u.rol === 'sub_ventas' || u.id === 'juanmanuel',
+  subirMaterial: u => esDirector(u),
 
-  // Agenda de campo
+  // Agenda de campo (oculta por ahora)
   editarAgenda: u => u.sector === 'ventas',
 
   // Tareas
-  asignarTareaA: (u, otro) => esDirector(u) || (esSub(u) && mismoSector(u, otro)),
-  verTareasDe: (u, otro) => esDirector(u) || u.id === otro.id || (esSub(u) && mismoSector(u, otro)),
+  // Horacio asigna a cualquiera; Katia y Lucas se crean tareas para ellos mismos.
+  asignarTareaA: (u, otro) => esDirector(u) || (esSub(u) && u.id === otro.id),
+  verTareasDe: (u, otro) => esDirector(u) || u.id === otro.id,
 
   // Cartelera
   publicarNovedad: u => esDirector(u) || esSub(u),
 
-  // Recordatorios
+  // Recordatorios (ocultos por ahora)
   verRecordatorio: (u, r) => r.categoria === 'garantias' || esDirector(u) || u.rol === 'sub_admin',
   editarRecordatorio: (u, r) =>
     r.categoria === 'garantias' ? u.rol === 'sub_ventas' : (esDirector(u) || u.rol === 'sub_admin'),
