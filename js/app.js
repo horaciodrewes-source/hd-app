@@ -446,6 +446,11 @@ conectar.qr = () => {
 
 let mesAsistencia = hoyISO().slice(0, 7);
 let detalleAsistencia = null;
+function aniosAsistencia() {
+  const actual = Number(hoyISO().slice(0, 4));
+  const desde = Math.min(actual - 1, ...DB.todos('fichajes').map(f => Number(f.fecha.slice(0, 4))));
+  return Array.from({ length: actual - desde + 1 }, (_, i) => String(actual - i));
+}
 
 function vistaAsistencia() {
   const visibles = usuariosActivos().filter(u => puede(yo, 'verAsistenciaDe', u));
@@ -456,7 +461,8 @@ function vistaAsistencia() {
   const detR = det && resumenMes(det, mesAsistencia);
   return `<h1>Asistencia de ${MESES[Number(m) - 1]} ${a}</h1>
   <div class="card row">
-    <label style="max-width:220px">Mes <input type="month" id="mes" value="${mesAsistencia}"></label>
+    <label style="max-width:160px">Mes <select id="mes-m">${opciones(MESES.map((n, i) => [String(i + 1).padStart(2, '0'), n[0].toUpperCase() + n.slice(1)]), m)}</select></label>
+    <label style="max-width:120px">Año <select id="mes-a">${opciones(aniosAsistencia().map(x => [x, x]), a)}</select></label>
     ${puede(yo, 'exportarAsistencia') ? '<button id="exportar">Descargar para Excel (CSV)</button>' : ''}
   </div>
   <div class="card table-wrap">
@@ -478,7 +484,10 @@ function vistaAsistencia() {
   </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div>` : ''}`;
 }
 conectar.asistencia = () => {
-  $('#mes').onchange = e => { mesAsistencia = e.target.value || mesAsistencia; detalleAsistencia = null; render(); };
+  // Listas de mes y año (no el calendario del celular): cambian recién al confirmar la elección.
+  const cambiarMes = () => { mesAsistencia = `${$('#mes-a').value}-${$('#mes-m').value}`; detalleAsistencia = null; render(); };
+  $('#mes-m').onchange = cambiarMes;
+  $('#mes-a').onchange = cambiarMes;
   document.querySelectorAll('[data-detalle]').forEach(b => b.onclick = () => {
     detalleAsistencia = detalleAsistencia === b.dataset.detalle ? null : b.dataset.detalle;
     render();
