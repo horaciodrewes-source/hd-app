@@ -219,7 +219,7 @@ function vistaLogin() {
   return `<div class="login card">
     <h1>HD Interna</h1>
     <p class="muted">En la versión final cada persona entra con su cuenta de Google. En esta prueba, elegí con quién querés entrar para ver qué puede hacer cada rol.</p>
-    ${usuariosActivos().map(u => `<button class="user-btn" data-login="${u.id}"><span>${esc(u.nombre)}</span><small>${ROLES[u.rol]}</small></button>`).join('')}
+    ${usuariosActivos().map(u => `<button class="user-btn" data-login="${u.id}"><span>${esc(u.nombre)}</span><small>${esc(u.cargo || ROLES[u.rol])}</small></button>`).join('')}
   </div>`;
 }
 
