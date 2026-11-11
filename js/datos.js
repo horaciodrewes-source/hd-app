@@ -17,6 +17,16 @@ function sumarDias(iso, dias) {
 }
 const nuevoId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
+// Lugares donde se ficha con QR. Cada uno tiene su propio código.
+function lugaresIniciales(tokenOlazabal) {
+  return [
+    { id: 'olazabal', nombre: 'HD Olazábal', direccion: 'Av. Olazábal 4261, Villa Urquiza', token: tokenOlazabal },
+    { id: 'deposito', nombre: 'Depósito', direccion: '', token: 'HD-' + nuevoId() },
+    { id: 'administracion', nombre: 'Administración', direccion: '', token: 'HD-' + nuevoId() },
+    { id: 'golfers', nombre: "Golfer's", direccion: '', token: 'HD-' + nuevoId() },
+  ];
+}
+
 function datosIniciales() {
   const hoy = hoyISO();
   const usuarios = [
@@ -41,16 +51,17 @@ function datosIniciales() {
       const llegada = 8 * 60 + 50 + Math.floor(azar() * 35);
       const salida = 17 * 60 + 55 + Math.floor(azar() * 20);
       const hora = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: hora(llegada), tipo: 'entrada' });
-      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: '13:00', tipo: 'salida' });
-      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: '14:00', tipo: 'entrada' });
-      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: hora(salida), tipo: 'salida' });
+      const lugar = 'HD Olazábal';
+      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: hora(llegada), tipo: 'entrada', lugar });
+      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: '13:00', tipo: 'salida', lugar });
+      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: '14:00', tipo: 'entrada', lugar });
+      fichajes.push({ id: nuevoId(), usuario: u.id, fecha: dia, hora: hora(salida), tipo: 'salida', lugar });
     }
   }
 
   return {
     config: {
-      tokenQR: 'HD-' + nuevoId(),
+      lugares: lugaresIniciales('HD-' + nuevoId()),
       horaEntrada: '09:00',
       toleranciaMin: 10,
       horasDiarias: 8,
@@ -108,6 +119,9 @@ const DB = {
     } catch (e) {
       this._datos = datosIniciales();
     }
+    // Datos guardados antes de que existieran los lugares: el QR impreso sigue valiendo para Olazábal.
+    const cfg = this._datos.config;
+    if (!cfg.lugares) cfg.lugares = lugaresIniciales(cfg.tokenQR || 'HD-' + nuevoId());
     this.guardar();
   },
   guardar() {
