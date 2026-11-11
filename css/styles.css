@@ -158,8 +158,3 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   main#app { margin: 0; }
 }
 
-/* Detalle desplegable (Asistencia) */
-details.detalle > summary { list-style: none; cursor: pointer; font-size: 1.1rem; font-weight: 600; margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; }
-details.detalle > summary::-webkit-details-marker { display: none; }
-details.detalle > summary::before { content: '▸'; display: inline-block; transition: transform .15s; }
-details.detalle[open] > summary::before { transform: rotate(90deg); }

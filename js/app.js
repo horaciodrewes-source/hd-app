@@ -58,7 +58,6 @@ function badgeEstado(estado) {
 let yo = null;
 function iniciarSesion(id) {
   detalleAsistencia = null;
-  detalleAbierto = false;
   try { sessionStorage.setItem('hdapp-usuario', id); } catch (e) { /* sin almacenamiento */ }
   yo = usuario(id);
   location.hash = '#inicio';
@@ -447,13 +446,13 @@ conectar.qr = () => {
 
 let mesAsistencia = hoyISO().slice(0, 7);
 let detalleAsistencia = null;
-let detalleAbierto = false;
 
 function vistaAsistencia() {
   const visibles = usuariosActivos().filter(u => puede(yo, 'verAsistenciaDe', u));
   const filas = visibles.map(u => ({ u, r: resumenMes(u.id, mesAsistencia) }));
   const [a, m] = mesAsistencia.split('-');
-  const det = detalleAsistencia && visibles.find(u => u.id === detalleAsistencia) ? detalleAsistencia : (visibles.length === 1 ? visibles[0].id : null);
+  // El detalle se muestra solo cuando se toca "Ver días"; no se abre solo.
+  const det = detalleAsistencia && visibles.find(u => u.id === detalleAsistencia) ? detalleAsistencia : null;
   const detR = det && resumenMes(det, mesAsistencia);
   return `<h1>Asistencia de ${MESES[Number(m) - 1]} ${a}</h1>
   <div class="card row">
@@ -466,28 +465,25 @@ function vistaAsistencia() {
       <tbody>${filas.map(({ u, r }) => `<tr>
         <td>${esc(u.nombre)}</td><td class="num">${r.dias}</td><td class="num">${fmtHoras(r.minutos)}</td>
         <td class="num">${r.tardes}</td><td class="num">${r.ausencias}</td><td class="num">${r.licencias}</td><td class="num">${r.vacaciones}</td>
-        <td><button data-detalle="${u.id}">Ver días</button></td></tr>`).join('')}</tbody>
+        <td><button data-detalle="${u.id}">${det === u.id ? 'Ocultar días' : 'Ver días'}</button></td></tr>`).join('')}</tbody>
     </table>
     <small>Después de hora: primera entrada después de las ${DB.config.horaEntrada} más ${DB.config.toleranciaMin} minutos de tolerancia.</small>
   </div>
-  ${detR ? `<details class="detalle" id="detalle" ${detalleAbierto ? 'open' : ''}><summary>Detalle de ${esc(nombre(det))}</summary>
+  ${detR ? `<h2 id="detalle">Detalle de ${esc(nombre(det))}</h2>
   <div class="card table-wrap"><table>
     <thead><tr><th>Fecha</th><th>Fichajes</th><th class="num">Horas</th><th></th></tr></thead>
     <tbody>${detR.detalle.map(d => `<tr><td>${fmtFecha(d.fecha)}</td>
       <td>${d.lista.map(f => `${f.tipo === 'entrada' ? '▶' : '■'} ${f.hora}${f.corregido ? '*' : ''}${f.lugar && f.lugar !== 'HD Olazábal' ? ` <small>(${textoLugar(f)})</small>` : ''}`).join(' &nbsp; ')}</td>
       <td class="num">${fmtHoras(d.minutos)}</td><td>${d.tarde ? '<span class="badge warn">después de hora</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin fichajes este mes.</td></tr>'}</tbody>
-  </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div></details>` : ''}`;
+  </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div>` : ''}`;
 }
 conectar.asistencia = () => {
-  $('#mes').onchange = e => { mesAsistencia = e.target.value || mesAsistencia; render(); };
+  $('#mes').onchange = e => { mesAsistencia = e.target.value || mesAsistencia; detalleAsistencia = null; render(); };
   document.querySelectorAll('[data-detalle]').forEach(b => b.onclick = () => {
-    detalleAsistencia = b.dataset.detalle;
-    detalleAbierto = true;
+    detalleAsistencia = detalleAsistencia === b.dataset.detalle ? null : b.dataset.detalle;
     render();
     $('#detalle')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
-  const det = $('#detalle');
-  if (det) det.ontoggle = () => { detalleAbierto = det.open; };
   const exp = $('#exportar');
   if (exp) exp.onclick = () => {
     const filas = [['Persona', 'Días trabajados', 'Horas', 'Después de hora', 'Ausencias', 'Licencias', 'Días de vacaciones']];
