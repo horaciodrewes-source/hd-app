@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.11';
+const VERSION = '2026.11.11 v2';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -57,6 +57,7 @@ function badgeEstado(estado) {
 
 let yo = null;
 function iniciarSesion(id) {
+  detalleAsistencia = null;
   try { sessionStorage.setItem('hdapp-usuario', id); } catch (e) { /* sin almacenamiento */ }
   yo = usuario(id);
   location.hash = '#inicio';
@@ -445,42 +446,56 @@ conectar.qr = () => {
 
 let mesAsistencia = hoyISO().slice(0, 7);
 let detalleAsistencia = null;
+function aniosAsistencia() {
+  const actual = Number(hoyISO().slice(0, 4));
+  const desde = Math.min(actual - 1, ...DB.todos('fichajes').map(f => Number(f.fecha.slice(0, 4))));
+  return Array.from({ length: actual - desde + 1 }, (_, i) => String(actual - i));
+}
 
 function vistaAsistencia() {
   const visibles = usuariosActivos().filter(u => puede(yo, 'verAsistenciaDe', u));
   const filas = visibles.map(u => ({ u, r: resumenMes(u.id, mesAsistencia) }));
   const [a, m] = mesAsistencia.split('-');
-  const det = detalleAsistencia && visibles.find(u => u.id === detalleAsistencia) ? detalleAsistencia : (visibles.length === 1 ? visibles[0].id : null);
+  // El detalle se muestra solo cuando se toca "Ver días"; no se abre solo.
+  const det = detalleAsistencia && visibles.find(u => u.id === detalleAsistencia) ? detalleAsistencia : null;
   const detR = det && resumenMes(det, mesAsistencia);
   return `<h1>Asistencia de ${MESES[Number(m) - 1]} ${a}</h1>
   <div class="card row">
-    <label style="max-width:220px">Mes <input type="month" id="mes" value="${mesAsistencia}"></label>
+    <label style="max-width:160px">Mes <select id="mes-m">${opciones(MESES.map((n, i) => [String(i + 1).padStart(2, '0'), n[0].toUpperCase() + n.slice(1)]), m)}</select></label>
+    <label style="max-width:120px">Año <select id="mes-a">${opciones(aniosAsistencia().map(x => [x, x]), a)}</select></label>
     ${puede(yo, 'exportarAsistencia') ? '<button id="exportar">Descargar para Excel (CSV)</button>' : ''}
   </div>
   <div class="card table-wrap">
     <table>
-      <thead><tr><th>Persona</th><th class="num">Días</th><th class="num">Horas</th><th class="num">Llegadas tarde</th><th class="num">Ausencias</th><th class="num">Licencias</th><th class="num">Vacaciones</th><th></th></tr></thead>
+      <thead><tr><th>Persona</th><th class="num">Días</th><th class="num">Horas</th><th class="num">Después de hora</th><th class="num">Ausencias</th><th class="num">Licencias</th><th class="num">Vacaciones</th><th></th></tr></thead>
       <tbody>${filas.map(({ u, r }) => `<tr>
         <td>${esc(u.nombre)}</td><td class="num">${r.dias}</td><td class="num">${fmtHoras(r.minutos)}</td>
         <td class="num">${r.tardes}</td><td class="num">${r.ausencias}</td><td class="num">${r.licencias}</td><td class="num">${r.vacaciones}</td>
-        <td><button data-detalle="${u.id}">Ver días</button></td></tr>`).join('')}</tbody>
+        <td><button data-detalle="${u.id}">${det === u.id ? 'Ocultar días' : 'Ver días'}</button></td></tr>`).join('')}</tbody>
     </table>
-    <small>Llegada tarde: primera entrada después de las ${DB.config.horaEntrada} más ${DB.config.toleranciaMin} minutos de tolerancia.</small>
+    <small>Después de hora: primera entrada después de las ${DB.config.horaEntrada} más ${DB.config.toleranciaMin} minutos de tolerancia.</small>
   </div>
-  ${detR ? `<h2>Detalle de ${esc(nombre(det))}</h2>
+  ${detR ? `<h2 id="detalle">Detalle de ${esc(nombre(det))}</h2>
   <div class="card table-wrap"><table>
     <thead><tr><th>Fecha</th><th>Fichajes</th><th class="num">Horas</th><th></th></tr></thead>
     <tbody>${detR.detalle.map(d => `<tr><td>${fmtFecha(d.fecha)}</td>
       <td>${d.lista.map(f => `${f.tipo === 'entrada' ? '▶' : '■'} ${f.hora}${f.corregido ? '*' : ''}${f.lugar && f.lugar !== 'HD Olazábal' ? ` <small>(${textoLugar(f)})</small>` : ''}`).join(' &nbsp; ')}</td>
-      <td class="num">${fmtHoras(d.minutos)}</td><td>${d.tarde ? '<span class="badge warn">tarde</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin fichajes este mes.</td></tr>'}</tbody>
+      <td class="num">${fmtHoras(d.minutos)}</td><td>${d.tarde ? '<span class="badge warn">después de hora</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin fichajes este mes.</td></tr>'}</tbody>
   </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div>` : ''}`;
 }
 conectar.asistencia = () => {
-  $('#mes').onchange = e => { mesAsistencia = e.target.value || mesAsistencia; render(); };
-  document.querySelectorAll('[data-detalle]').forEach(b => b.onclick = () => { detalleAsistencia = b.dataset.detalle; render(); });
+  // Listas de mes y año (no el calendario del celular): cambian recién al confirmar la elección.
+  const cambiarMes = () => { mesAsistencia = `${$('#mes-a').value}-${$('#mes-m').value}`; detalleAsistencia = null; render(); };
+  $('#mes-m').onchange = cambiarMes;
+  $('#mes-a').onchange = cambiarMes;
+  document.querySelectorAll('[data-detalle]').forEach(b => b.onclick = () => {
+    detalleAsistencia = detalleAsistencia === b.dataset.detalle ? null : b.dataset.detalle;
+    render();
+    $('#detalle')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   const exp = $('#exportar');
   if (exp) exp.onclick = () => {
-    const filas = [['Persona', 'Días trabajados', 'Horas', 'Llegadas tarde', 'Ausencias', 'Licencias', 'Días de vacaciones']];
+    const filas = [['Persona', 'Días trabajados', 'Horas', 'Después de hora', 'Ausencias', 'Licencias', 'Días de vacaciones']];
     for (const u of usuariosActivos().filter(u => puede(yo, 'verAsistenciaDe', u))) {
       const r = resumenMes(u.id, mesAsistencia);
       filas.push([u.nombre, r.dias, (r.minutos / 60).toFixed(2).replace('.', ','), r.tardes, r.ausencias, r.licencias, r.vacaciones]);
