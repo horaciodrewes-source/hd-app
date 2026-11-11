@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.11 v2';
+const VERSION = '2026.11.11 v3';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -286,7 +286,7 @@ function vistaFichar() {
   return `<h1>Fichar ${tipo}: ¿dónde estás?</h1>
   <div class="card">
     <h3>En un lugar con código QR</h3>
-    <p>Escaneá el QR del lugar donde estás (${lugares().map(l => esc(l.nombre)).join(', ')}). Se guardan el lugar, la fecha y la hora.</p>
+    <p>Escaneá el QR del lugar donde estás. La app reconoce el lugar y guarda la fecha y la hora.</p>
     <div id="reader"></div>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="abrir-camara">Abrir cámara</button>
