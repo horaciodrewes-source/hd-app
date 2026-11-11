@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.10.25';
+const VERSION = '2026.11.10';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -169,11 +169,12 @@ const RUTAS = [
   { id: 'ausencias', titulo: 'Ausencias y licencias', seccion: 'Personal', vista: vistaAusencias },
   { id: 'vacaciones', titulo: 'Vacaciones', seccion: 'Personal', vista: vistaVacaciones },
   { id: 'recibos', titulo: 'Recibos de sueldo', seccion: 'Personal', vista: vistaRecibos },
-  { id: 'precios', titulo: 'Lista de precios', seccion: 'Trabajo', vista: vistaPrecios },
+  { id: 'precios', titulo: 'Lista de precios', seccion: 'Trabajo', vista: vistaPrecios, visible: u => puede(u, 'verPrecios') },
   { id: 'material', titulo: 'Folletos y material', seccion: 'Trabajo', vista: vistaMaterial },
-  { id: 'agenda', titulo: 'Agenda de campo', seccion: 'Trabajo', vista: vistaAgenda },
-  { id: 'recordatorios', titulo: 'Recordatorios', seccion: 'Trabajo', vista: vistaRecordatorios },
-  { id: 'aprobaciones', titulo: 'Aprobaciones', seccion: 'Administración', vista: vistaAprobaciones, visible: u => u.rol !== 'empleado' },
+  // Para más adelante (el código sigue abajo): Agenda de campo y Recordatorios.
+  // { id: 'agenda', titulo: 'Agenda de campo', seccion: 'Trabajo', vista: vistaAgenda },
+  // { id: 'recordatorios', titulo: 'Recordatorios', seccion: 'Trabajo', vista: vistaRecordatorios },
+  { id: 'aprobaciones', titulo: 'Aprobaciones', seccion: 'Administración', vista: vistaAprobaciones, visible: u => u.rol === 'director' },
   { id: 'qr', titulo: 'Código QR de la entrada', seccion: 'Administración', vista: vistaQR, visible: u => puede(u, 'administrarUsuarios') },
   { id: 'usuarios', titulo: 'Usuarios y ajustes', seccion: 'Administración', vista: vistaUsuarios, visible: u => puede(u, 'administrarUsuarios') },
 ];
@@ -218,7 +219,7 @@ function vistaLogin() {
   return `<div class="login card">
     <h1>HD Interna</h1>
     <p class="muted">En la versión final cada persona entra con su cuenta de Google. En esta prueba, elegí con quién querés entrar para ver qué puede hacer cada rol.</p>
-    ${usuariosActivos().map(u => `<button class="user-btn" data-login="${u.id}"><span>${esc(u.nombre)}</span><small>${ROLES[u.rol]}</small></button>`).join('')}
+    ${usuariosActivos().map(u => `<button class="user-btn" data-login="${u.id}"><span>${esc(u.nombre)}</span><small>${esc(u.cargo || ROLES[u.rol])}</small></button>`).join('')}
   </div>`;
 }
 
@@ -229,8 +230,6 @@ function vistaInicio() {
   const pend = pendientesPara(yo);
   const tareas = DB.todos('tareas').filter(t => t.asignado === yo.id && !t.hecha);
   const novedades = [...DB.todos('novedades')].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 3);
-  const recs = DB.todos('recordatorios').filter(r => puede(yo, 'verRecordatorio', r) && diasEntre(hoyISO(), r.vence) <= 15)
-    .sort((a, b) => a.vence.localeCompare(b.vence));
   return `<h1>Hola, ${esc(nombreCorto(yo.id))}</h1>
   <div class="grid">
     <div class="card">
@@ -245,7 +244,6 @@ function vistaInicio() {
       ${tareas.length ? tareas.map(t => `<div class="list-item">${esc(t.titulo)} <small>vence ${fmtFecha(t.vence)}</small></div>`).join('') : '<p class="muted">No tenés tareas pendientes.</p>'}
     </div>
   </div>
-  ${recs.length ? `<h2>Próximos vencimientos</h2><div class="card">${recs.map(r => `<div class="list-item">${esc(r.titulo)} ${badgeVence(r.vence)}</div>`).join('')}</div>` : ''}
   <h2>Novedades</h2>
   <div class="card">${novedades.map(n => `<div class="list-item"><h3>${esc(n.titulo)}</h3><p>${esc(n.texto)}</p><small>${esc(nombre(n.autor))} · ${fmtFecha(n.fecha)}</small></div>`).join('') || '<p class="muted">Sin novedades.</p>'}</div>`;
 }
@@ -540,7 +538,6 @@ conectar.aprobaciones = () => {
 
 let editandoPrecio = null;
 function vistaPrecios() {
-  const costos = puede(yo, 'verCostos');
   const editar = puede(yo, 'editarPrecios');
   const lista = [...DB.todos('precios')].sort((a, b) => (a.marca + a.tipo).localeCompare(b.marca + b.tipo));
   const ed = editandoPrecio && DB.buscar('precios', editandoPrecio);
@@ -548,9 +545,8 @@ function vistaPrecios() {
   return `<h1>Lista de precios</h1>
   <p class="muted">Actualizada el ${fmtFecha(DB.valor('preciosActualizados'))}. ${editar ? '' : 'Solo Horacio puede modificarla.'}</p>
   <div class="card table-wrap"><table>
-    <thead><tr><th>Marca</th><th>Equipo</th><th>Modelo</th><th class="num">Precio de venta</th>${costos ? '<th class="num">Costo</th><th class="num">Margen</th>' : ''}${editar ? '<th></th>' : ''}</tr></thead>
+    <thead><tr><th>Marca</th><th>Equipo</th><th>Modelo</th><th class="num">Precio de venta</th>${editar ? '<th></th>' : ''}</tr></thead>
     <tbody>${lista.map(p => `<tr><td>${esc(p.marca)}</td><td>${esc(p.tipo)}</td><td>${esc(p.modelo)}</td><td class="num">${money(p.precio, p.moneda)}</td>
-      ${costos ? `<td class="num">${money(p.costo, p.moneda)}</td><td class="num">${p.precio && p.costo ? Math.round((p.precio - p.costo) / p.precio * 100) + ' %' : ''}</td>` : ''}
       ${editar ? `<td><button data-editar="${p.id}">Editar</button></td>` : ''}</tr>`).join('')}</tbody>
   </table></div>
   ${editar ? `<div class="card"><h3>${ed ? 'Editar equipo' : 'Agregar equipo'}</h3>
@@ -561,7 +557,6 @@ function vistaPrecios() {
         <label>Modelo <input name="modelo" required value="${esc(ed?.modelo)}"></label>
         <label>Moneda <select name="moneda">${opciones([['USD', 'USD'], ['ARS', 'ARS']], ed?.moneda)}</select></label>
         <label>Precio de venta <input type="number" min="0" step="0.01" name="precio" value="${ed?.precio || ''}"></label>
-        <label>Costo <input type="number" min="0" step="0.01" name="costo" value="${ed?.costo || ''}"></label>
       </div>
       <div class="row"><button class="primary">Guardar</button>${ed ? '<button type="button" id="cancelar">Cancelar</button><button type="button" class="bad" id="borrar">Borrar</button>' : ''}</div>
     </form></div>` : ''}`;
@@ -574,7 +569,6 @@ conectar.precios = () => {
     e.preventDefault();
     const d = datosForm(form);
     d.precio = Number(d.precio) || 0;
-    d.costo = Number(d.costo) || 0;
     if (editandoPrecio) DB.actualizar('precios', editandoPrecio, d); else DB.agregar('precios', d);
     DB.setValor('preciosActualizados', hoyISO());
     editandoPrecio = null;

@@ -3,7 +3,7 @@
 // Cuando se conecte Firebase, solo hay que reemplazar este archivo: el resto
 // de la app usa nada más que las funciones de `DB`.
 
-const CLAVE = 'hdapp-v1';
+const CLAVE = 'hdapp-v2';
 
 const hoyISO = () => fechaISO(new Date());
 function fechaISO(d) {
@@ -23,8 +23,8 @@ function datosIniciales() {
     { id: 'horacio', nombre: 'Horacio G. Drewes', cargo: 'Director General', rol: 'director', sector: 'direccion', ingreso: '1980-01-02', activo: true },
     { id: 'katia', nombre: 'Katia Drewes', cargo: 'Subdirectora de Administración', rol: 'sub_admin', sector: 'administracion', ingreso: '2015-03-01', activo: true },
     { id: 'lucas', nombre: 'Lucas Guillermo Drewes', cargo: 'Subdirector de Ventas, Servicio Técnico y Marketing', rol: 'sub_ventas', sector: 'ventas', ingreso: '2012-03-01', activo: true },
-    { id: 'gustavo', nombre: 'Gustavo Daniel Fiori', cargo: 'Técnico de Servicio', rol: 'empleado', sector: 'ventas', ingreso: '2008-05-01', activo: true },
-    { id: 'juanmanuel', nombre: 'Juan Manuel Sánchez Valle', cargo: 'Coordinador de Ventas, Compras, Marketing y Servicios Técnicos Digitales', rol: 'empleado', sector: 'ventas', ingreso: '2021-08-01', activo: true },
+    { id: 'gustavo', nombre: 'Gustavo Daniel Fiori', cargo: 'Servicio Técnico', rol: 'empleado', sector: 'ventas', ingreso: '2008-05-01', activo: true },
+    { id: 'juanmanuel', nombre: 'Juan Manuel Sánchez Valle', cargo: 'Coordinador de Marketing y Servicios Digitales', rol: 'empleado', sector: 'ventas', ingreso: '2021-08-01', activo: true },
   ];
 
   // Fichajes de ejemplo de los últimos 30 días hábiles
@@ -64,15 +64,15 @@ function datosIniciales() {
       { id: nuevoId(), usuario: 'juanmanuel', tipo: 'ausencia', fecha: sumarDias(hoy, -6), motivo: 'Enfermedad', adjunto: 'certificado.jpg', estado: 'aprobado', resolvio: 'lucas', creado: sumarDias(hoy, -6) },
     ],
     vacaciones: [
-      { id: nuevoId(), usuario: 'gustavo', desde: sumarDias(hoy, 70), hasta: sumarDias(hoy, 83), estado: 'pendiente_sector', creado: hoy, historial: [] },
+      { id: nuevoId(), usuario: 'gustavo', desde: sumarDias(hoy, 70), hasta: sumarDias(hoy, 83), estado: 'pendiente_director', creado: hoy, historial: [] },
       { id: nuevoId(), usuario: 'katia', desde: sumarDias(hoy, 90), hasta: sumarDias(hoy, 103), estado: 'aprobado', creado: sumarDias(hoy, -20), historial: [] },
     ],
     precios: [
-      { id: nuevoId(), marca: 'I-Optik', tipo: 'Biseladora', modelo: 'Biseladora automática (modelo a completar)', precio: 0, costo: 0, moneda: 'USD' },
-      { id: nuevoId(), marca: 'I-Optik', tipo: 'Lensómetro', modelo: 'Lensómetro automático (modelo a completar)', precio: 0, costo: 0, moneda: 'USD' },
-      { id: nuevoId(), marca: 'I-Optik', tipo: 'Autorrefractómetro', modelo: 'Autorrefractómetro (modelo a completar)', precio: 0, costo: 0, moneda: 'USD' },
-      { id: nuevoId(), marca: 'Supore', tipo: 'Biseladora', modelo: 'Biseladora (modelo a completar)', precio: 0, costo: 0, moneda: 'USD' },
-      { id: nuevoId(), marca: 'Oftalmología', tipo: 'Lámpara de hendidura', modelo: 'Lámpara de hendidura (modelo a completar)', precio: 0, costo: 0, moneda: 'USD' },
+      { id: nuevoId(), marca: 'I-Optik', tipo: 'Biseladora', modelo: 'Biseladora automática (modelo a completar)', precio: 0, moneda: 'USD' },
+      { id: nuevoId(), marca: 'I-Optik', tipo: 'Lensómetro', modelo: 'Lensómetro automático (modelo a completar)', precio: 0, moneda: 'USD' },
+      { id: nuevoId(), marca: 'I-Optik', tipo: 'Autorrefractómetro', modelo: 'Autorrefractómetro (modelo a completar)', precio: 0, moneda: 'USD' },
+      { id: nuevoId(), marca: 'Supore', tipo: 'Biseladora', modelo: 'Biseladora (modelo a completar)', precio: 0, moneda: 'USD' },
+      { id: nuevoId(), marca: 'Oftalmología', tipo: 'Lámpara de hendidura', modelo: 'Lámpara de hendidura (modelo a completar)', precio: 0, moneda: 'USD' },
     ],
     preciosActualizados: hoy,
     material: [
