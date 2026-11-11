@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.11 v3';
+const VERSION = '2026.11.11 v4';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -382,11 +382,10 @@ function vistaQR() {
   </div>
   ${l ? `<div class="card">
     <div style="text-align:center">
-      <h2>HD Máquinas Ópticas · Fichaje</h2>
+      <h2>HD Máquinas Ópticas</h2>
       <h3>${esc(l.nombre)}</h3>
       ${l.direccion ? `<p class="muted">${esc(l.direccion)}</p>` : ''}
       <div id="qr-box"></div>
-      <p class="muted">Escaneá desde la app HD Interna al llegar y al irte.</p>
     </div>
     <div class="row no-print">
       <button class="primary" onclick="window.print()">Imprimir</button>
