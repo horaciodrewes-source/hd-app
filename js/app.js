@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.11';
+const VERSION = '2026.11.11b';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -57,6 +57,8 @@ function badgeEstado(estado) {
 
 let yo = null;
 function iniciarSesion(id) {
+  detalleAsistencia = null;
+  detalleAbierto = false;
   try { sessionStorage.setItem('hdapp-usuario', id); } catch (e) { /* sin almacenamiento */ }
   yo = usuario(id);
   location.hash = '#inicio';
@@ -445,6 +447,7 @@ conectar.qr = () => {
 
 let mesAsistencia = hoyISO().slice(0, 7);
 let detalleAsistencia = null;
+let detalleAbierto = false;
 
 function vistaAsistencia() {
   const visibles = usuariosActivos().filter(u => puede(yo, 'verAsistenciaDe', u));
@@ -459,28 +462,35 @@ function vistaAsistencia() {
   </div>
   <div class="card table-wrap">
     <table>
-      <thead><tr><th>Persona</th><th class="num">Días</th><th class="num">Horas</th><th class="num">Llegadas tarde</th><th class="num">Ausencias</th><th class="num">Licencias</th><th class="num">Vacaciones</th><th></th></tr></thead>
+      <thead><tr><th>Persona</th><th class="num">Días</th><th class="num">Horas</th><th class="num">Después de hora</th><th class="num">Ausencias</th><th class="num">Licencias</th><th class="num">Vacaciones</th><th></th></tr></thead>
       <tbody>${filas.map(({ u, r }) => `<tr>
         <td>${esc(u.nombre)}</td><td class="num">${r.dias}</td><td class="num">${fmtHoras(r.minutos)}</td>
         <td class="num">${r.tardes}</td><td class="num">${r.ausencias}</td><td class="num">${r.licencias}</td><td class="num">${r.vacaciones}</td>
         <td><button data-detalle="${u.id}">Ver días</button></td></tr>`).join('')}</tbody>
     </table>
-    <small>Llegada tarde: primera entrada después de las ${DB.config.horaEntrada} más ${DB.config.toleranciaMin} minutos de tolerancia.</small>
+    <small>Después de hora: primera entrada después de las ${DB.config.horaEntrada} más ${DB.config.toleranciaMin} minutos de tolerancia.</small>
   </div>
-  ${detR ? `<h2>Detalle de ${esc(nombre(det))}</h2>
+  ${detR ? `<details class="detalle" id="detalle" ${detalleAbierto ? 'open' : ''}><summary>Detalle de ${esc(nombre(det))}</summary>
   <div class="card table-wrap"><table>
     <thead><tr><th>Fecha</th><th>Fichajes</th><th class="num">Horas</th><th></th></tr></thead>
     <tbody>${detR.detalle.map(d => `<tr><td>${fmtFecha(d.fecha)}</td>
       <td>${d.lista.map(f => `${f.tipo === 'entrada' ? '▶' : '■'} ${f.hora}${f.corregido ? '*' : ''}${f.lugar && f.lugar !== 'HD Olazábal' ? ` <small>(${textoLugar(f)})</small>` : ''}`).join(' &nbsp; ')}</td>
-      <td class="num">${fmtHoras(d.minutos)}</td><td>${d.tarde ? '<span class="badge warn">tarde</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin fichajes este mes.</td></tr>'}</tbody>
-  </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div>` : ''}`;
+      <td class="num">${fmtHoras(d.minutos)}</td><td>${d.tarde ? '<span class="badge warn">después de hora</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin fichajes este mes.</td></tr>'}</tbody>
+  </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div></details>` : ''}`;
 }
 conectar.asistencia = () => {
   $('#mes').onchange = e => { mesAsistencia = e.target.value || mesAsistencia; render(); };
-  document.querySelectorAll('[data-detalle]').forEach(b => b.onclick = () => { detalleAsistencia = b.dataset.detalle; render(); });
+  document.querySelectorAll('[data-detalle]').forEach(b => b.onclick = () => {
+    detalleAsistencia = b.dataset.detalle;
+    detalleAbierto = true;
+    render();
+    $('#detalle')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  const det = $('#detalle');
+  if (det) det.ontoggle = () => { detalleAbierto = det.open; };
   const exp = $('#exportar');
   if (exp) exp.onclick = () => {
-    const filas = [['Persona', 'Días trabajados', 'Horas', 'Llegadas tarde', 'Ausencias', 'Licencias', 'Días de vacaciones']];
+    const filas = [['Persona', 'Días trabajados', 'Horas', 'Después de hora', 'Ausencias', 'Licencias', 'Días de vacaciones']];
     for (const u of usuariosActivos().filter(u => puede(yo, 'verAsistenciaDe', u))) {
       const r = resumenMes(u.id, mesAsistencia);
       filas.push([u.nombre, r.dias, (r.minutos / 60).toFixed(2).replace('.', ','), r.tardes, r.ausencias, r.licencias, r.vacaciones]);
