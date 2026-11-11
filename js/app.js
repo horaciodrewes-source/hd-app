@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.11 v4';
+const VERSION = '2026.11.11 v5';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -95,6 +95,24 @@ function registrarFichaje(tipoOrigen, donde = {}) {
   render();
 }
 const lugares = () => DB.config.lugares || [];
+// "Llegué, espero afuera": entrada sin QR que queda pendiente hasta escanear el QR al entrar.
+function esperaPendiente(uid) {
+  const hoy = fichajesDe(uid, hoyISO());
+  const ult = hoy[hoy.length - 1];
+  return ult && ult.tipo === 'entrada' && ult.espera && !ult.entro ? ult : null;
+}
+const notaEspera = f => f.espera ? ` <small class="muted">(esperó afuera${f.entro ? ', entró ' + f.entro : ', sin confirmar con QR'})</small>` : '';
+// Al escanear un QR: si estaba esperando afuera, confirma esa entrada; si no, ficha normal.
+function ficharConQR(origen, l) {
+  const pend = esperaPendiente(yo.id);
+  if (pend) {
+    DB.actualizar('fichajes', pend.id, { entro: horaActual(), lugar: l.nombre, lugarId: l.id });
+    toast(`Entrada confirmada en ${l.nombre}. Cuenta desde las ${pend.hora}, cuando llegaste.`);
+    render();
+  } else {
+    registrarFichaje(origen, { lugar: l.nombre, lugarId: l.id });
+  }
+}
 const linkMapa = f => f.lat != null ? `https://www.google.com/maps?q=${f.lat},${f.lng}` : '';
 function textoLugar(f) {
   if (!f.lugar) return '';
@@ -108,6 +126,7 @@ function dondeEstaCadaUno() {
     const ult = hoy[hoy.length - 1];
     if (!ult) return { u, estado: 'sin', texto: 'Sin fichar hoy' };
     if (ult.tipo === 'salida') return { u, estado: 'fuera', texto: `No disponible · salió a las ${ult.hora}` };
+    if (ult.espera && !ult.entro) return { u, estado: 'espera', texto: `Esperando afuera de ${esc(ult.lugar)} · desde las ${ult.hora}` };
     return { u, estado: 'en', texto: `${textoLugar(ult) || 'Trabajando'} · desde las ${ult.hora}` };
   });
 }
@@ -253,9 +272,9 @@ function vistaInicio() {
   <div class="grid">
     <div class="card">
       <h3>Hoy</h3>
-      ${hoy.length ? hoy.map(f => `<div>${f.tipo === 'entrada' ? 'Entrada' : 'Salida'}: <b>${f.hora}</b> ${f.lugar ? '<small>' + textoLugar(f) + '</small>' : ''}</div>`).join('') : '<p class="muted">Todavía no fichaste hoy.</p>'}
+      ${hoy.length ? hoy.map(f => `<div>${f.tipo === 'entrada' ? 'Entrada' : 'Salida'}: <b>${f.hora}</b> ${f.lugar ? '<small>' + textoLugar(f) + '</small>' : ''}${notaEspera(f)}</div>`).join('') : '<p class="muted">Todavía no fichaste hoy.</p>'}
       <p></p>
-      <a class="btn btn-primary" href="#fichar">Fichar ${proximoTipo(yo.id)}: ¿dónde estás?</a>
+      <a class="btn btn-primary" href="#fichar">${esperaPendiente(yo.id) ? "Confirmar entrada con el QR" : `Fichar ${proximoTipo(yo.id)}: ¿dónde estás?`}</a>
     </div>
     ${pend.total ? `<div class="card"><h3>Para aprobar</h3><div class="stat">${pend.total}</div><a href="#aprobaciones">Ver pedidos pendientes</a></div>` : ''}
     <div class="card">
@@ -266,7 +285,7 @@ function vistaInicio() {
   <h2>¿Dónde está cada uno?</h2>
   <div class="card">${dondeEstaCadaUno().map(d => `<div class="list-item row" style="justify-content:space-between">
     <b>${esc(nombreCorto(d.u.id))}</b>
-    <span class="${d.estado === 'en' ? '' : 'muted'}">${d.estado === 'en' ? '<span class="badge ok">disponible</span> ' : ''}${d.texto}</span></div>`).join('')}
+    <span class="${d.estado === 'en' || d.estado === 'espera' ? '' : 'muted'}">${d.estado === 'en' ? '<span class="badge ok">disponible</span> ' : d.estado === 'espera' ? '<span class="badge warn">afuera</span> ' : ''}${d.texto}</span></div>`).join('')}
     <small class="muted">En la versión de prueba se ven solo los fichajes hechos en este celular. Con Firebase se van a ver los de todos.</small></div>
   <h2>Novedades</h2>
   <div class="card">${novedades.map(n => `<div class="list-item"><h3>${esc(n.titulo)}</h3><p>${esc(n.texto)}</p><small>${esc(nombre(n.autor))} · ${fmtFecha(n.fecha)}</small></div>`).join('') || '<p class="muted">Sin novedades.</p>'}</div>`;
@@ -283,7 +302,9 @@ function vistaFichar() {
   const tipo = proximoTipo(yo.id);
   const hoy = fichajesDe(yo.id, hoyISO());
   const mias = DB.todos('correcciones').filter(c => c.usuario === yo.id).slice(-5).reverse();
-  return `<h1>Fichar ${tipo}: ¿dónde estás?</h1>
+  const pend = esperaPendiente(yo.id);
+  return `<h1>${pend ? 'Confirmar entrada' : `Fichar ${tipo}: ¿dónde estás?`}</h1>
+  ${pend ? `<div class="notice warn">Llegaste a ${esc(pend.lugar)} a las <b>${pend.hora}</b> y estás esperando afuera. Cuando entres, escaneá el QR para confirmar la entrada. Las horas cuentan desde que llegaste.</div>` : ''}
   <div class="card">
     <h3>En un lugar con código QR</h3>
     <p>Escaneá el QR del lugar donde estás. La app reconoce el lugar y guarda la fecha y la hora.</p>
@@ -297,7 +318,15 @@ function vistaFichar() {
     </div>
     <div id="msg-scan"></div>
   </div>
-  <div class="card">
+  ${tipo === 'entrada' ? `<div class="card">
+    <h3>¿Llegaste y está cerrado?</h3>
+    <p class="muted">Si nadie llegó todavía con la llave, avisá que estás afuera. Queda registrada la hora de llegada y, al entrar, escaneás el QR para confirmar.</p>
+    <div class="row">
+      <select id="espera-lugar" style="max-width:260px">${opciones(lugares().map(l => [l.id, l.nombre]))}</select>
+      <button class="primary" id="espera">Llegué, espero afuera</button>
+    </div>
+  </div>` : ''}
+  ${pend ? '' : `<div class="card">
     <h3>En una visita (óptica, cliente, viaje)</h3>
     <p class="muted">Donde no hay QR: escribí dónde estás y se guarda la ubicación del celular en ese momento. No se sigue tu recorrido; la ubicación se toma solo al fichar.</p>
     <form class="stack" id="form-visita">
@@ -305,10 +334,10 @@ function vistaFichar() {
       <div><button class="primary">Fichar ${tipo} con mi ubicación</button></div>
     </form>
     <div id="msg-visita"></div>
-  </div>
+  </div>`}
   <div class="card">
     <h3>Mis fichajes de hoy</h3>
-    ${hoy.length ? hoy.map(f => `<div>${f.tipo === 'entrada' ? 'Entrada' : 'Salida'}: <b>${f.hora}</b> ${textoLugar(f)}${f.corregido ? ' <span class="badge">corregido</span>' : ''}</div>`).join('') : '<p class="muted">Sin fichajes todavía.</p>'}
+    ${hoy.length ? hoy.map(f => `<div>${f.tipo === 'entrada' ? 'Entrada' : 'Salida'}: <b>${f.hora}</b> ${textoLugar(f)}${notaEspera(f)}${f.corregido ? ' <span class="badge">corregido</span>' : ''}</div>`).join('') : '<p class="muted">Sin fichajes todavía.</p>'}
   </div>
   <div class="card">
     <h3>¿Te olvidaste de fichar?</h3>
@@ -327,12 +356,22 @@ function vistaFichar() {
 }
 conectar.fichar = () => {
   const msg = $('#msg-scan');
-  const deLugar = l => ({ lugar: l.nombre, lugarId: l.id });
   $('#simular').onclick = () => {
     const l = lugares().find(x => x.id === $('#simular-lugar').value);
-    if (l) registrarFichaje('simulado', deLugar(l));
+    if (l) ficharConQR('simulado', l);
   };
-  $('#form-visita').onsubmit = e => {
+  if ($('#espera')) $('#espera').onclick = () => {
+    const l = lugares().find(x => x.id === $('#espera-lugar').value);
+    if (!l) return;
+    const guardar = (pos = {}) => registrarFichaje('espera', { lugar: l.nombre, lugarId: l.id, espera: true, ...pos });
+    // La ubicación ayuda a mostrar que estaba en la puerta; si no se puede tomar, se registra igual.
+    if (!navigator.geolocation) return guardar();
+    navigator.geolocation.getCurrentPosition(
+      p => guardar({ lat: +p.coords.latitude.toFixed(5), lng: +p.coords.longitude.toFixed(5) }),
+      () => guardar(),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  };
+  if ($('#form-visita')) $('#form-visita').onsubmit = e => {
     e.preventDefault();
     const lugar = e.target.lugar.value.trim();
     const mv = $('#msg-visita');
@@ -354,7 +393,7 @@ conectar.fichar = () => {
       const l = lugares().find(x => texto === 'HDAPP|' + x.token);
       if (l) {
         detenerEscaner();
-        registrarFichaje('qr', deLugar(l));
+        ficharConQR('qr', l);
       } else {
         msg.innerHTML = '<div class="notice bad">Ese código QR no es de ningún lugar de HD (o es uno viejo que se reemplazó).</div>';
       }
@@ -478,7 +517,7 @@ function vistaAsistencia() {
   <div class="card table-wrap"><table>
     <thead><tr><th>Fecha</th><th>Fichajes</th><th class="num">Horas</th><th></th></tr></thead>
     <tbody>${detR.detalle.map(d => `<tr><td>${fmtFecha(d.fecha)}</td>
-      <td>${d.lista.map(f => `${f.tipo === 'entrada' ? '▶' : '■'} ${f.hora}${f.corregido ? '*' : ''}${f.lugar && f.lugar !== 'HD Olazábal' ? ` <small>(${textoLugar(f)})</small>` : ''}`).join(' &nbsp; ')}</td>
+      <td>${d.lista.map(f => `${f.tipo === 'entrada' ? '▶' : '■'} ${f.hora}${f.corregido ? '*' : ''}${f.lugar && f.lugar !== 'HD Olazábal' ? ` <small>(${textoLugar(f)})</small>` : ''}${notaEspera(f)}`).join(' &nbsp; ')}</td>
       <td class="num">${fmtHoras(d.minutos)}</td><td>${d.tarde ? '<span class="badge warn">después de hora</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin fichajes este mes.</td></tr>'}</tbody>
   </table><small>▶ entrada · ■ salida · * corregido con aprobación · entre paréntesis, si no fue en Olazábal</small></div>` : ''}`;
 }
