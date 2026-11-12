@@ -158,3 +158,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   main#app { margin: 0; }
 }
 
+
+/* Catálogo de folletos y manuales */
+details.cat-equipo { border-bottom: 1px solid var(--border, #ddd); }
+details.cat-equipo > summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+details.cat-tipo { margin: 0 0 8px 14px; }
+details.cat-tipo > summary { cursor: pointer; padding: 6px 0; }
+.cat-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cat-item .row { flex-shrink: 0; }

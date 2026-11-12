@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.12';
+const VERSION = '2026.11.12 v2';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -208,7 +208,7 @@ const RUTAS = [
   { id: 'vacaciones', titulo: 'Vacaciones', seccion: 'Personal', vista: vistaVacaciones },
   { id: 'recibos', titulo: 'Recibos de sueldo', seccion: 'Personal', vista: vistaRecibos },
   { id: 'precios', titulo: 'Lista de precios', seccion: 'Trabajo', vista: vistaPrecios, visible: u => puede(u, 'verPrecios') },
-  { id: 'material', titulo: 'Folletos y material', seccion: 'Trabajo', vista: vistaMaterial },
+  { id: 'material', titulo: 'Folletos y manuales', seccion: 'Trabajo', vista: vistaMaterial },
   // Para más adelante (el código sigue abajo): Agenda de campo y Recordatorios.
   // { id: 'agenda', titulo: 'Agenda de campo', seccion: 'Trabajo', vista: vistaAgenda },
   // { id: 'recordatorios', titulo: 'Recordatorios', seccion: 'Trabajo', vista: vistaRecordatorios },
@@ -737,38 +737,193 @@ conectar.precios = () => {
   };
 };
 
-// ---------- Folletos y material ----------
+// ---------- Folletos, manuales y videos (catálogo de Drive) ----------
+// La lista sale de la carpeta de Drive a través del programa de Apps Script
+// (apps-script/Codigo.gs). Se guarda en el celular para verla sin conexión.
 
-let filtroMaterial = '';
-function vistaMaterial() {
-  const subir = puede(yo, 'subirMaterial');
-  const q = filtroMaterial.toLowerCase();
-  const lista = DB.todos('material').filter(m => !q || (m.titulo + m.marca + m.tipo).toLowerCase().includes(q));
-  return `<h1>Folletos y material</h1>
-  <div class="card"><label>Buscar <input id="buscar" value="${esc(filtroMaterial)}" placeholder="Marca, equipo, tipo…"></label></div>
-  <div class="card">${lista.map(m => `<div class="list-item row" style="justify-content:space-between">
-      <div><b>${esc(m.titulo)}</b><br><small>${esc(m.marca)} · ${esc(m.tipo)} · subido por ${esc(nombreCorto(m.subio))} el ${fmtFecha(m.fecha)}</small></div>
-      <div class="row">${m.link ? `<a class="btn btn-primary" href="${esc(m.link)}" target="_blank" rel="noopener">Abrir</a>` : '<span class="muted">link a completar</span>'}
-      ${subir ? `<button class="bad" data-borrar="${m.id}">Borrar</button>` : ''}</div></div>`).join('') || '<p class="muted">No hay material que coincida.</p>'}</div>
-  ${subir ? `<div class="card"><h3>Agregar material</h3>
-    <p class="muted">Subí el archivo a Google Drive, compartilo con "cualquiera con el enlace" y pegá el link acá.</p>
-    <form class="stack" id="form-material"><div class="grid">
-      <label>Título <input name="titulo" required></label>
-      <label>Marca <select name="marca">${opciones([['I-Optik', 'I-Optik'], ['Supore', 'Supore'], ['Oftalmología', 'Oftalmología'], ['Briot / Weco / Luneau', 'Briot / Weco / Luneau'], ['HD', 'HD (institucional)']])}</select></label>
-      <label>Tipo <select name="tipo">${opciones([['Folleto', 'Folleto'], ['Ficha técnica', 'Ficha técnica'], ['Manual', 'Manual'], ['Video', 'Video'], ['Fotos', 'Fotos para redes']])}</select></label>
-      <label>Link <input type="url" name="link" required placeholder="https://drive.google.com/…"></label>
-    </div><div><button class="primary">Agregar</button></div></form></div>` : ''}`;
+const URL_CATALOGO = '';  // URL /exec de Apps Script; también se puede poner en Usuarios y ajustes.
+const urlCatalogo = () => URL_CATALOGO || DB.config.urlCatalogo || '';
+const CATEGORIAS_CAT = {
+  1: 'Manuales y guías rápidas',
+  3: 'Folletos',
+  4: 'Imágenes',
+  5: 'Videos',
+  6: 'Explicaciones útiles',
+};
+const numPrefijo = n => { const m = String(n).trim().match(/^0*(\d+)/); return m ? Number(m[1]) : 0; };
+const nombreLimpio = n => String(n).trim().replace(/^\d+\s+/, '').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/\s+/g, ' ').trim();
+const normalizarCat = t => String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const compacto = t => normalizarCat(t).replace(/[^a-z0-9]/g, '');
+
+function catalogo() { return DB.valor('catalogo') || { fecha: null, archivos: [] }; }
+function nuevosCatalogo() { return new Set(DB.valor('catalogoNuevos') || []); }
+
+// Videos: se muestra el link de YouTube (.txt). El .mp4 solo si no hay link en esa carpeta.
+function archivosVisibles() {
+  const lista = catalogo().archivos.filter(a => CATEGORIAS_CAT[numPrefijo(a.nombre)]);
+  const conLink = new Set(lista.filter(a => a.link).map(a => a.ruta.join('/')));
+  return lista.filter(a => {
+    if (numPrefijo(a.nombre) !== 5) return true;
+    if (a.link) return true;
+    return /^video\//.test(a.tipo) && !conLink.has(a.ruta.join('/'));
+  });
 }
+
+function coincide(a, q) {
+  const texto = normalizarCat(a.nombre + ' ' + a.ruta.join(' ') + ' ' + CATEGORIAS_CAT[numPrefijo(a.nombre)]);
+  const comp = compacto(texto);
+  return normalizarCat(q).split(/\s+/).filter(Boolean).every(w => texto.includes(w) || comp.includes(compacto(w)));
+}
+
+function itemCatalogo(a, conRuta, nuevos) {
+  const esLink = !!a.link;
+  const sinLinkVideo = numPrefijo(a.nombre) === 5 && !esLink;
+  return `<div class="list-item cat-item">
+    <div><b>${esc(nombreLimpio(a.nombre))}</b>${nuevos.has(a.id) ? ' <span class="badge ok">nuevo</span>' : ''}
+      ${conRuta ? `<br><small class="muted">${esc(a.ruta.join(' › ') || 'General')} · ${esc(CATEGORIAS_CAT[numPrefijo(a.nombre)])}</small>` : ''}
+      ${sinLinkVideo ? '<br><small class="muted">Falta el link de YouTube para compartirlo.</small>' : ''}</div>
+    <div class="row">
+      ${esLink ? `<a class="btn" href="${esc(a.link)}" target="_blank" rel="noopener">Abrir</a>
+        <a class="btn btn-primary" href="https://wa.me/?text=${encodeURIComponent(nombreLimpio(a.nombre) + ' ' + a.link)}" target="_blank" rel="noopener">WhatsApp</a>`
+      : `<button data-abrir="${a.id}">Abrir</button>${sinLinkVideo ? '' : `<button class="primary" data-compartir="${a.id}">${listosParaCompartir.has(a.id) ? 'Enviar' : 'Compartir'}</button>`}`}
+    </div></div>`;
+}
+
+function arbolCatalogo(lista, nuevos) {
+  const porEquipo = {};
+  for (const a of lista) (porEquipo[a.ruta.join(' › ') || 'General'] ||= []).push(a);
+  const equipos = Object.keys(porEquipo).sort((x, y) => x === 'General' ? -1 : y === 'General' ? 1 : x.localeCompare(y, 'es'));
+  return equipos.map(eq => {
+    const items = porEquipo[eq];
+    const hayNuevo = items.some(a => nuevos.has(a.id));
+    const porCat = {};
+    for (const a of items) (porCat[numPrefijo(a.nombre)] ||= []).push(a);
+    return `<details class="cat-equipo"><summary>${esc(eq)} <small class="muted">(${items.length})</small>${hayNuevo ? ' <span class="badge ok">nuevo</span>' : ''}</summary>
+      ${Object.keys(porCat).sort((a, b) => a - b).map(c => `<details class="cat-tipo"><summary>${esc(CATEGORIAS_CAT[c])} <small class="muted">(${porCat[c].length})</small></summary>
+        ${porCat[c].sort((x, y) => x.nombre.localeCompare(y.nombre, 'es', { numeric: true })).map(a => itemCatalogo(a, false, nuevos)).join('')}
+      </details>`).join('')}
+    </details>`;
+  }).join('');
+}
+
+let filtroCatalogo = '';
+const listosParaCompartir = new Map();  // id -> File ya bajado, listo para el menú de compartir
+
+function vistaMaterial() {
+  const cat = catalogo();
+  const url = urlCatalogo();
+  return `<h1>Folletos, manuales y videos</h1>
+  ${!url ? `<div class="notice warn">Falta conectar la carpeta de Drive. ${yo.rol === 'director' ? 'Seguí los pasos de <a href="https://github.com/horaciodrewes-source/hd-app/blob/main/apps-script/LEEME.md" target="_blank" rel="noopener">esta guía</a> y pegá la dirección en Usuarios y ajustes.' : 'Avisale a Horacio.'}</div>` : ''}
+  <div class="card">
+    <label>Buscar <input id="buscar-cat" type="search" value="${esc(filtroCatalogo)}" placeholder="Equipo, modelo o tema: ark 910, folleto lensómetro…" autocomplete="off"></label>
+    <div class="row" style="margin-top:10px;justify-content:space-between">
+      <small class="muted">${cat.fecha ? `${cat.archivos.length ? archivosVisibles().length + ' archivos · ' : ''}revisado el ${fmtFecha(cat.fecha.slice(0, 10))} a las ${cat.fecha.slice(11, 16)}` : 'Todavía no se revisó la carpeta.'}</small>
+      ${url ? '<button id="novedades">Buscar novedades</button>' : ''}
+    </div>
+    <div id="msg-cat"></div>
+  </div>
+  <div class="card" id="lista-cat"></div>`;
+}
+
+function pintarCatalogo() {
+  const caja = $('#lista-cat');
+  if (!caja) return;
+  const nuevos = nuevosCatalogo();
+  const lista = archivosVisibles();
+  if (!lista.length) { caja.innerHTML = '<p class="muted">Todavía no hay archivos. Tocá "Buscar novedades".</p>'; return; }
+  if (filtroCatalogo.trim()) {
+    const r = lista.filter(a => coincide(a, filtroCatalogo)).sort((x, y) => numPrefijo(x.nombre) - numPrefijo(y.nombre) || x.nombre.localeCompare(y.nombre, 'es', { numeric: true }));
+    caja.innerHTML = r.length ? `<small class="muted">${r.length} resultado${r.length === 1 ? '' : 's'}</small>` + r.slice(0, 80).map(a => itemCatalogo(a, true, nuevos)).join('') : '<p class="muted">No encontré nada con esas palabras.</p>';
+  } else {
+    caja.innerHTML = arbolCatalogo(lista, nuevos);
+  }
+}
+
+async function pedirCatalogo(params) {
+  const url = urlCatalogo() + (params ? '?' + new URLSearchParams(params) : '');
+  const r = await fetch(url);
+  const datos = await r.json();
+  if (datos.error) throw new Error(datos.error);
+  return datos;
+}
+
+async function bajarArchivo(a) {
+  if (listosParaCompartir.has(a.id)) return listosParaCompartir.get(a.id);
+  const d = await pedirCatalogo({ accion: 'archivo', id: a.id });
+  const bytes = Uint8Array.from(atob(d.datos), c => c.charCodeAt(0));
+  const archivo = new File([bytes], d.nombre.replace(/^\d+\s+/, ''), { type: d.tipo || a.tipo });
+  listosParaCompartir.set(a.id, archivo);
+  return archivo;
+}
+
 conectar.material = () => {
-  const b = $('#buscar');
-  b.oninput = () => { filtroMaterial = b.value; render(); const n = $('#buscar'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
-  document.querySelectorAll('[data-borrar]').forEach(x => x.onclick = () => { if (confirm('¿Borrar este material?')) { DB.borrar('material', x.dataset.borrar); render(); } });
-  const f = $('#form-material');
-  if (f) f.onsubmit = e => {
-    e.preventDefault();
-    DB.agregar('material', { ...datosForm(f), subio: yo.id, fecha: hoyISO() });
-    toast('Material agregado');
-    render();
+  pintarCatalogo();
+  const msg = $('#msg-cat');
+  const b = $('#buscar-cat');
+  b.oninput = () => { filtroCatalogo = b.value; pintarCatalogo(); };
+
+  if ($('#novedades')) $('#novedades').onclick = async () => {
+    msg.innerHTML = '<div class="notice info">Revisando la carpeta de Drive…</div>';
+    try {
+      const antes = catalogo();
+      const nuevo = await pedirCatalogo();
+      const conocidos = new Set(antes.archivos.map(a => a.id));
+      const agregados = antes.fecha ? nuevo.archivos.filter(a => !conocidos.has(a.id)).map(a => a.id) : [];
+      DB.setValor('catalogo', nuevo);
+      DB.setValor('catalogoNuevos', agregados.length ? agregados : (DB.valor('catalogoNuevos') || []).filter(id => nuevo.archivos.some(a => a.id === id)));
+      toast(!antes.fecha ? `Listo: catálogo cargado.` : agregados.length ? `${agregados.length} archivo${agregados.length === 1 ? '' : 's'} nuevo${agregados.length === 1 ? '' : 's'}.` : 'No hay archivos nuevos.');
+      render();
+    } catch (e) {
+      msg.innerHTML = `<div class="notice bad">No se pudo revisar la carpeta: ${esc(e.message)}</div>`;
+    }
+  };
+
+  // Un solo manejador para los botones de la lista (se vuelve a pintar al buscar).
+  $('#lista-cat').onclick = async e => {
+    const btn = e.target.closest('[data-abrir],[data-compartir]');
+    if (!btn) return;
+    const id = btn.dataset.abrir || btn.dataset.compartir;
+    const a = catalogo().archivos.find(x => x.id === id);
+    if (!a) return;
+
+    if (btn.dataset.abrir) {
+      const ventana = window.open('', '_blank');  // se abre ya, para que el celular no la bloquee
+      btn.disabled = true; btn.textContent = 'Abriendo…';
+      try {
+        const f = await bajarArchivo(a);
+        const u = URL.createObjectURL(f);
+        if (ventana) ventana.location.href = u; else location.href = u;
+      } catch (err) {
+        if (ventana) ventana.close();
+        msg.innerHTML = `<div class="notice bad">No se pudo abrir: ${esc(err.message)}</div>`;
+        msg.scrollIntoView({ behavior: 'smooth' });
+      }
+      btn.disabled = false; btn.textContent = 'Abrir';
+      return;
+    }
+
+    // Compartir: el primer toque baja el archivo; con el archivo listo, se abre el menú del celular.
+    if (listosParaCompartir.has(id)) {
+      const f = listosParaCompartir.get(id);
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        try { await navigator.share({ files: [f], title: nombreLimpio(a.nombre) }); } catch (err) { /* cancelado */ }
+      } else {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(f); link.download = f.name; link.click();
+        toast('Este equipo no permite compartir archivos: se descargó para enviarlo a mano.');
+      }
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Preparando…';
+    try {
+      await bajarArchivo(a);
+      btn.textContent = 'Enviar';
+      btn.disabled = false;
+      toast('Listo. Tocá "Enviar" y elegí WhatsApp.');
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Compartir';
+      msg.innerHTML = `<div class="notice bad">No se pudo preparar el archivo: ${esc(err.message)}</div>`;
+    }
   };
 };
 
@@ -1078,7 +1233,8 @@ function vistaUsuarios() {
       <label>Hora de entrada <input type="time" name="horaEntrada" value="${esc(cfg.horaEntrada)}"></label>
       <label>Tolerancia (minutos) <input type="number" min="0" name="toleranciaMin" value="${esc(cfg.toleranciaMin)}"></label>
       <label>Anticipación para pedir vacaciones (días) <input type="number" min="45" name="anticipacionVacaciones" value="${esc(cfg.anticipacionVacaciones)}"></label>
-    </div><div><button class="primary">Guardar ajustes</button></div></form></div>
+    </div>
+    <label>Dirección del catálogo de Drive (Apps Script, termina en /exec) <input type="url" name="urlCatalogo" value="${esc(cfg.urlCatalogo || '')}" placeholder="https://script.google.com/macros/s/…/exec"></label><div><button class="primary">Guardar ajustes</button></div></form></div>
   <div class="card"><h3>Datos de prueba</h3><p class="muted">Borra todo lo cargado en este navegador y vuelve a los datos de ejemplo.</p><button class="bad" id="reiniciar">Reiniciar datos de prueba</button></div>`;
 }
 conectar.usuarios = () => {
