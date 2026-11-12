@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.12 v2';
+const VERSION = '2026.11.12 v3';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -741,7 +741,7 @@ conectar.precios = () => {
 // La lista sale de la carpeta de Drive a través del programa de Apps Script
 // (apps-script/Codigo.gs). Se guarda en el celular para verla sin conexión.
 
-const URL_CATALOGO = '';  // URL /exec de Apps Script; también se puede poner en Usuarios y ajustes.
+const URL_CATALOGO = 'https://script.google.com/macros/s/AKfycbzU9l08ZZS0t6rY62uzDSXOa8iGRtmAweGokfTqrOkxRug23uAbkvrfrIK60VyqWLBT/exec';  // URL /exec de Apps Script; también se puede poner en Usuarios y ajustes.
 const urlCatalogo = () => URL_CATALOGO || DB.config.urlCatalogo || '';
 const CATEGORIAS_CAT = {
   1: 'Manuales y guías rápidas',
