@@ -176,3 +176,4 @@ label.fac-btn-foto { display: inline-block; margin: 0; }
 .fac-paginas img { width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
 .fac-paginas figcaption { font-size: .85rem; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 4px; }
 button.mini { padding: 2px 8px; font-size: .8rem; }
+canvas.vista-recibo { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; background: #fff; margin-top: 8px; }
