@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.12 v3';
+const VERSION = '2026.11.17 v1';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -209,6 +209,7 @@ const RUTAS = [
   { id: 'recibos', titulo: 'Recibos de sueldo', seccion: 'Personal', vista: vistaRecibos },
   { id: 'precios', titulo: 'Lista de precios', seccion: 'Trabajo', vista: vistaPrecios, visible: u => puede(u, 'verPrecios') },
   { id: 'material', titulo: 'Folletos y manuales', seccion: 'Trabajo', vista: vistaMaterial },
+  { id: 'factura', titulo: 'Escanear factura', seccion: 'Trabajo', vista: vistaFactura },
   // Para más adelante (el código sigue abajo): Agenda de campo y Recordatorios.
   // { id: 'agenda', titulo: 'Agenda de campo', seccion: 'Trabajo', vista: vistaAgenda },
   // { id: 'recordatorios', titulo: 'Recordatorios', seccion: 'Trabajo', vista: vistaRecordatorios },
@@ -249,7 +250,7 @@ function render() {
 }
 
 // Cada vista devuelve HTML; `conectar[id]` engancha los eventos de esa vista.
-const conectar = {};
+const conectar = { factura: () => conectarFactura() };  // la de factura está en js/factura.js
 
 // ---------- Login ----------
 

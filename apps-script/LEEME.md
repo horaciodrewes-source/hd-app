@@ -12,3 +12,14 @@
 6. Copiá la **URL de la aplicación web** (termina en `/exec`) y pasásela a Claude.
 
 Si más adelante se cambia el código: Implementar → Administrar implementaciones → editar (lápiz) → Versión: nueva → Implementar. La URL no cambia.
+
+## Facturas escaneadas (desde la versión 2026.11.17)
+
+El mismo programa recibe las facturas que se escanean en la app y las guarda en la carpeta
+"Varios Husky / 00 Fact proveedores". Para activarlo:
+
+1. En el proyecto **HD Interna Catálogo**, reemplazá todo el código por el nuevo `Codigo.gs` y guardá.
+2. **Implementar → Administrar implementaciones →** lápiz **→ Versión: Nueva versión → Implementar.**
+3. Google vuelve a pedir permiso, ahora para **crear** archivos en tu Drive: **Autorizar acceso** y seguí los mismos pasos que la primera vez.
+
+La URL no cambia.
