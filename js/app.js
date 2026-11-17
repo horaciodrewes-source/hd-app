@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.17 v2';
+const VERSION = '2026.11.17 v3';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1143,14 +1143,38 @@ function vistaRecibos() {
     ${p ? `<h3 style="margin-top:16px">Revisá antes de guardar</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Página</th><th>Es de</th><th>Se guarda como</th></tr></thead>
-        <tbody>${p.paginas.map((pg, i) => `<tr><td>${pg.numero}</td>
+        <tbody>${p.paginas.map((pg, i) => `<tr><td>${pg.numero} <button class="mini" data-ver-pagina="${pg.numero}">Ver</button></td>
           <td><select data-pagina="${i}"><option value="">— no cargar —</option>${opciones(usuariosActivos().filter(u => u.rol !== 'director').map(u => [u.id, u.nombre]), pg.usuario)}</select>
           ${pg.usuario ? '' : '<div class="notice warn">No se reconoció el nombre. Elegí a quién corresponde.</div>'}</td>
           <td><small>${pg.usuario ? esc(nombreArchivoRecibo(pg.usuario, p.mes)) : ''}</small></td></tr>`).join('')}</tbody>
       </table></div>
+      <div id="vista-recibo"></div>
       <div class="row" style="margin-top:12px"><button class="primary" id="guardar-recibos">Guardar recibos</button>
       <button id="descargar-recibos">Descargarlos también (para Drive)</button><button id="cancelar-recibos">Cancelar</button></div>` : ''}
   </div>` : ''}`;
+}
+
+// Muestra una página del PDF de Alcalá debajo de la tabla, para comprobar de quién es.
+async function verPaginaRecibo(n) {
+  const caja = $('#vista-recibo');
+  if (!caja) return;
+  if (caja.dataset.pagina === String(n)) { caja.innerHTML = ''; caja.dataset.pagina = ''; return; }
+  caja.dataset.pagina = String(n);
+  caja.innerHTML = `<div class="row" style="justify-content:space-between;margin-top:12px"><b>Página ${n}</b><button class="mini" id="cerrar-vista-recibo">Cerrar</button></div><canvas class="vista-recibo"></canvas>`;
+  $('#cerrar-vista-recibo').onclick = () => { caja.innerHTML = ''; caja.dataset.pagina = ''; };
+  try {
+    const doc = await pdfjsLib.getDocument({ data: reciboEnProceso.bytes.slice() }).promise;
+    const pagina = await doc.getPage(n);
+    const base = pagina.getViewport({ scale: 1 });
+    const escala = Math.min(2.5, (caja.clientWidth * (window.devicePixelRatio || 1)) / base.width);
+    const vp = pagina.getViewport({ scale: escala });
+    const lienzo = caja.querySelector('canvas');
+    lienzo.width = vp.width; lienzo.height = vp.height;
+    await pagina.render({ canvasContext: lienzo.getContext('2d'), viewport: vp }).promise;
+    caja.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    caja.innerHTML = '<div class="notice bad">No se pudo mostrar la página.</div>';
+  }
 }
 
 async function separarPaginas(bytes, numeros) {
@@ -1197,6 +1221,7 @@ conectar.recibos = () => {
     render();
   });
   const elegidas = () => reciboEnProceso.paginas.filter(pg => pg.usuario);
+  document.querySelectorAll('[data-ver-pagina]').forEach(b => b.onclick = () => verPaginaRecibo(Number(b.dataset.verPagina)));
   if ($('#cancelar-recibos')) $('#cancelar-recibos').onclick = () => { reciboEnProceso = null; render(); };
   if ($('#descargar-recibos')) $('#descargar-recibos').onclick = async () => {
     const pags = elegidas();
