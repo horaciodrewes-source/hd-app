@@ -1,0 +1,48 @@
+rules_version = '2';
+// Reglas de seguridad de HD Interna (Firestore).
+// Se pegan en la consola de Firebase: Firestore Database → Reglas → Publicar.
+// Reemplazar MAIL_DE_HORACIO por el mail de Google de Horacio (en minúsculas).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function logueado() { return request.auth != null && request.auth.token.email_verified == true; }
+    function mail() { return request.auth.token.email.lower(); }
+    function esHoracio() { return logueado() && mail() == 'MAIL_DE_HORACIO'; }
+    function rutaAcceso() { return /databases/$(database)/documents/accesos/$(mail()); }
+    function tieneAcceso() { return logueado() && exists(rutaAcceso()); }
+    function acceso() { return get(rutaAcceso()).data; }
+    function esDirector() { return esHoracio() || (tieneAcceso() && acceso().rol == 'director'); }
+
+    // Quién puede entrar: cada mail apunta a una persona de la app.
+    match /accesos/{m} {
+      allow read: if logueado() && (m == mail() || esDirector());
+      allow write: if esDirector();
+    }
+
+    match /usuarios/{id} {
+      allow read: if tieneAcceso() || esDirector();
+      allow write: if esDirector();
+    }
+
+    match /ajustes/{id} {
+      allow read: if tieneAcceso() || esDirector();
+      allow write: if esDirector() || (tieneAcceso() && id == 'valores');
+    }
+
+    // Recibos de sueldo: cada uno ve los suyos; Horacio los carga y ve todos.
+    match /recibos/{id} {
+      allow read: if esDirector() || (tieneAcceso() && resource.data.usuario == acceso().usuario);
+      allow write: if esDirector();
+    }
+
+    // Precios: Gustavo no los ve.
+    match /precios/{id} {
+      allow read, write: if esDirector() || (tieneAcceso() && acceso().usuario != 'gustavo');
+    }
+
+    match /{col}/{id} {
+      allow read, write: if col in ['fichajes', 'correcciones', 'ausencias', 'vacaciones', 'material',
+                                    'agenda', 'tareas', 'novedades', 'recordatorios']
+                         && (tieneAcceso() || esDirector());
+    }
+  }
+}

@@ -129,3 +129,10 @@ function subirFactura(nombre, datos) {
   const f = carpeta.createFile(Utilities.newBlob(bytes, 'application/pdf', final));
   return { ok: true, nombre: final, url: f.getUrl() };
 }
+
+// Ejecutar una vez desde el editor para que Google pida el permiso de crear archivos.
+function probarFactura() {
+  const carpeta = DriveApp.getFolderById(CARPETA_FACTURAS);
+  const f = carpeta.createFile('prueba permiso.txt', 'ok');
+  f.setTrashed(true);
+}

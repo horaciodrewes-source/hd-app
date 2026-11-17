@@ -3,7 +3,7 @@
 // ---------- Utilidades ----------
 
 // Cambiar junto con los ?v= de index.html en cada versión, así los celulares bajan la nueva.
-const VERSION = '2026.11.17 v1';
+const VERSION = '2026.11.17 v2';
 
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -64,6 +64,7 @@ function iniciarSesion(id) {
   render();
 }
 function cerrarSesion() {
+  if (NUBE.activa) { yo = null; location.hash = ''; NUBE.salir(); return; }
   try { sessionStorage.removeItem('hdapp-usuario'); } catch (e) { /* sin almacenamiento */ }
   yo = null;
   location.hash = '';
@@ -226,6 +227,8 @@ function render() {
     nav.hidden = true;
     app.innerHTML = vistaLogin();
     app.querySelectorAll('[data-login]').forEach(b => b.onclick = () => iniciarSesion(b.dataset.login));
+    if ($('#entrar-google')) $('#entrar-google').onclick = () => NUBE.entrar();
+    if ($('#salir-google')) $('#salir-google').onclick = () => NUBE.salir();
     return;
   }
   const rutas = RUTAS.filter(r => !r.visible || r.visible(yo));
@@ -255,6 +258,15 @@ const conectar = { factura: () => conectarFactura() };  // la de factura está e
 // ---------- Login ----------
 
 function vistaLogin() {
+  if (NUBE.activa) {
+    const e = NUBE.estado;
+    return `<div class="login card">
+    <h1>HD Interna</h1>
+    ${e === 'cargando' || e === 'iniciando' ? '<p class="muted">Cargando…</p>'
+      : e === 'sinAcceso' ? `<div class="notice warn">La cuenta ${esc(NUBE.email)} no tiene acceso a la app. Pedile a Horacio que la agregue.</div><button id="salir-google">Entrar con otra cuenta</button>`
+      : `${e === 'error' ? `<div class="notice bad">No se pudo entrar: ${esc(NUBE.error)}</div>` : ''}<p class="muted">Entrá con tu cuenta de Google.</p><button class="primary big" id="entrar-google">Entrar con Google</button>`}
+  </div>`;
+  }
   return `<div class="login card">
     <h1>HD Interna</h1>
     <p class="muted">En la versión final cada persona entra con su cuenta de Google. En esta prueba, elegí con quién querés entrar para ver qué puede hacer cada rol.</p>
@@ -1198,9 +1210,11 @@ conectar.recibos = () => {
     const { mes } = reciboEnProceso;
     const archivos = await separarPaginas(reciboEnProceso.bytes, pags.map(pg => pg.numero));
     for (let i = 0; i < pags.length; i++) {
+      const archivo = await aDataURL(archivos[i]);
+      if (NUBE.activa && archivo.length > 950000) { toast(`El recibo de ${nombreCorto(pags[i].usuario)} es muy pesado para guardarlo`); continue; }
       const previo = DB.todos('recibos').find(r => r.usuario === pags[i].usuario && r.mes === mes);
       if (previo) DB.borrar('recibos', previo.id);
-      DB.agregar('recibos', { usuario: pags[i].usuario, mes, nombreArchivo: nombreArchivoRecibo(pags[i].usuario, mes), archivo: await aDataURL(archivos[i]), subio: yo.id });
+      DB.agregar('recibos', { usuario: pags[i].usuario, mes, nombreArchivo: nombreArchivoRecibo(pags[i].usuario, mes), archivo, subio: yo.id });
     }
     reciboEnProceso = null;
     toast(DB.guardar() ? `${pags.length} recibos guardados` : 'Atención: el navegador no tiene lugar para guardarlos');
@@ -1216,8 +1230,8 @@ function vistaUsuarios() {
   const cfg = DB.config;
   return `<h1>Usuarios y ajustes</h1>
   <div class="card table-wrap"><table>
-    <thead><tr><th>Nombre</th><th>Cargo</th><th>Rol</th><th>Ingreso</th><th>Estado</th><th></th></tr></thead>
-    <tbody>${DB.todos('usuarios').map(u => `<tr><td>${esc(u.nombre)}</td><td>${esc(u.cargo)}</td><td>${ROLES[u.rol]}</td><td>${fmtFecha(u.ingreso)}</td>
+    <thead><tr><th>Nombre</th><th>Cargo</th><th>Rol</th><th>Ingreso</th><th>Mail de Google</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${DB.todos('usuarios').map(u => `<tr><td>${esc(u.nombre)}</td><td>${esc(u.cargo)}</td><td>${ROLES[u.rol]}</td><td>${fmtFecha(u.ingreso)}</td><td>${u.email ? esc(u.email) : '<span class="badge warn">falta</span>'}</td>
       <td>${u.activo ? '<span class="badge ok">activo</span>' : '<span class="badge">de baja</span>'}</td><td><button data-editar="${u.id}">Editar</button></td></tr>`).join('')}</tbody>
   </table><small>Las fechas de ingreso son de ejemplo: cargá las reales, porque de ahí salen los días de vacaciones.</small></div>
   <div class="card"><h3>${ed ? 'Editar ' + esc(ed.nombre) : 'Nuevo usuario'}</h3>
@@ -1227,6 +1241,7 @@ function vistaUsuarios() {
       <label>Rol <select name="rol">${opciones(Object.entries(ROLES), ed?.rol || 'empleado')}</select></label>
       <label>Sector <select name="sector">${opciones(Object.entries(SECTORES), ed?.sector || 'ventas')}</select></label>
       <label>Fecha de ingreso <input type="date" name="ingreso" required value="${esc(ed?.ingreso)}"></label>
+      <label>Mail de Google (para entrar) <input type="email" name="email" value="${esc(ed?.email)}" placeholder="nombre@gmail.com"></label>
       <label>Estado <select name="activo">${opciones([['si', 'Activo'], ['no', 'De baja']], ed && !ed.activo ? 'no' : 'si')}</select></label>
     </div><div class="row"><button class="primary">Guardar</button>${ed ? '<button type="button" id="cancelar">Cancelar</button>' : ''}</div></form></div>
   <div class="card"><h3>Ajustes</h3>
@@ -1236,22 +1251,32 @@ function vistaUsuarios() {
       <label>Anticipación para pedir vacaciones (días) <input type="number" min="45" name="anticipacionVacaciones" value="${esc(cfg.anticipacionVacaciones)}"></label>
     </div>
     <label>Dirección del catálogo de Drive (Apps Script, termina en /exec) <input type="url" name="urlCatalogo" value="${esc(cfg.urlCatalogo || '')}" placeholder="https://script.google.com/macros/s/…/exec"></label><div><button class="primary">Guardar ajustes</button></div></form></div>
-  <div class="card"><h3>Datos de prueba</h3><p class="muted">Borra todo lo cargado en este navegador y vuelve a los datos de ejemplo.</p><button class="bad" id="reiniciar">Reiniciar datos de prueba</button></div>`;
+  ${NUBE.activa ? '' : `<div class="card"><h3>Datos de prueba</h3><p class="muted">Borra todo lo cargado en este navegador y vuelve a los datos de ejemplo.</p><button class="bad" id="reiniciar">Reiniciar datos de prueba</button></div>`}`;
 }
 conectar.usuarios = () => {
   document.querySelectorAll('[data-editar]').forEach(b => b.onclick = () => { editandoUsuario = b.dataset.editar; render(); });
   if ($('#cancelar')) $('#cancelar').onclick = () => { editandoUsuario = null; render(); };
-  $('#form-usuario').onsubmit = e => {
+  $('#form-usuario').onsubmit = async e => {
     e.preventDefault();
     const d = datosForm(e.target);
     d.activo = d.activo === 'si';
+    d.email = (d.email || '').trim().toLowerCase();
+    if (d.email && DB.todos('usuarios').some(u => u.email === d.email && u.id !== editandoUsuario)) { toast('Ese mail ya lo tiene otra persona'); return; }
+    let guardado;
+    const emailAnterior = editandoUsuario ? usuario(editandoUsuario).email || '' : '';
     if (editandoUsuario) {
       if (editandoUsuario === yo.id && d.rol !== 'director') { toast('No podés sacarte el rol de Director a vos mismo'); return; }
-      DB.actualizar('usuarios', editandoUsuario, d);
+      if (editandoUsuario === yo.id && NUBE.activa && d.email !== emailAnterior) { toast('Tu propio mail no se cambia desde acá'); return; }
+      guardado = DB.actualizar('usuarios', editandoUsuario, d);
     } else {
       const id = d.nombre.toLowerCase().normalize('NFD').replace(/[^a-z]/g, '').slice(0, 16) || nuevoId();
-      DB.todos('usuarios').push({ id: usuario(id) ? id + nuevoId().slice(0, 3) : id, ...d });
-      DB.guardar();
+      guardado = DB.agregar('usuarios', { ...d, id: usuario(id) ? id + nuevoId().slice(0, 3) : id });
+    }
+    if (NUBE.activa) {
+      try {
+        // Quien está de baja ya no puede entrar.
+        await NUBE.guardarAcceso(guardado.activo ? guardado : { ...guardado, email: '' }, emailAnterior);
+      } catch (err) { toast('No se pudo guardar el acceso: revisá la conexión'); return; }
     }
     editandoUsuario = null;
     yo = usuario(yo.id);
@@ -1264,7 +1289,7 @@ conectar.usuarios = () => {
     toast('Ajustes guardados');
     render();
   };
-  $('#reiniciar').onclick = () => {
+  if ($('#reiniciar')) $('#reiniciar').onclick = () => {
     if (!confirm('¿Borrar todo y volver a los datos de ejemplo?')) return;
     DB.reiniciar();
     yo = usuario(yo.id);
@@ -1274,12 +1299,17 @@ conectar.usuarios = () => {
 
 // ---------- Arranque ----------
 
-DB.cargar();
-try { yo = usuario(sessionStorage.getItem('hdapp-usuario')) || null; } catch (e) { yo = null; }
+if (NUBE.activa) {
+  $('#demo-banner').hidden = true;
+  NUBE.iniciar();
+} else {
+  DB.cargar();
+  try { yo = usuario(sessionStorage.getItem('hdapp-usuario')) || null; } catch (e) { yo = null; }
+}
 $('#menu-btn').onclick = () => $('#sidenav').classList.toggle('open');
 document.addEventListener('click', e => {
   const nav = $('#sidenav');
   if (nav.classList.contains('open') && !nav.contains(e.target) && e.target.id !== 'menu-btn') nav.classList.remove('open');
 });
 window.addEventListener('hashchange', render);
-render();
+if (!NUBE.activa) render();
