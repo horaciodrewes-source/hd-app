@@ -1,5 +1,5 @@
 /**
- * HD Interna · Catálogo de folletos, manuales y videos.
+ * HD Interna · Catálogo de folletos, manuales y videos, y facturas escaneadas.
  *
  * Este programa corre con la cuenta de Google de Horacio y le pasa a la app
  * la lista de archivos de la carpeta de Drive y, cuando alguien toca
@@ -14,6 +14,9 @@ const CARPETA = '1xZtbvn4vcpgsluGBO3qIyAEEXK8slXbW';
 const PREFIJOS_OCULTOS = ['02'];
 // Tamaño máximo para pasar un archivo a la app (Apps Script responde hasta ~50 MB).
 const MAX_BYTES = 30 * 1024 * 1024;
+// Carpeta "Varios Husky / 00 Fact proveedores", donde la app guarda las facturas escaneadas.
+const CARPETA_FACTURAS = '1-MVHUiRCgcRKC7e1aUxtpSeRowhFkGCP';
+const MAX_FACTURA = 25 * 1024 * 1024;
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
@@ -96,4 +99,33 @@ function archivo(id) {
   if (f.getSize() > MAX_BYTES) throw new Error('El archivo es muy grande para enviarlo desde la app.');
   const blob = f.getBlob();
   return { nombre: f.getName(), tipo: blob.getContentType(), datos: Utilities.base64Encode(blob.getBytes()) };
+}
+
+// La app manda las facturas escaneadas (PDF) por POST.
+function doPost(e) {
+  let resultado;
+  try {
+    const p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (p.accion !== 'subirFactura') throw new Error('Acción desconocida.');
+    resultado = subirFactura(p.nombre, p.datos);
+  } catch (err) {
+    resultado = { error: String(err && err.message || err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(resultado))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function subirFactura(nombre, datos) {
+  if (!datos) throw new Error('No llegó el archivo.');
+  const bytes = Utilities.base64Decode(datos);
+  if (bytes.length > MAX_FACTURA) throw new Error('La factura es muy grande.');
+  // Solo se aceptan PDF (empiezan con "%PDF").
+  if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== '%PDF') throw new Error('El archivo no es un PDF.');
+  let base = String(nombre || 'Factura.pdf').replace(/[\\/:*?"<>|]/g, '-').trim().slice(0, 120);
+  if (!/\.pdf$/i.test(base)) base += '.pdf';
+  const carpeta = DriveApp.getFolderById(CARPETA_FACTURAS);
+  let final = base;
+  for (let n = 2; carpeta.getFilesByName(final).hasNext(); n++) final = base.replace(/\.pdf$/i, ' (' + n + ').pdf');
+  const f = carpeta.createFile(Utilities.newBlob(bytes, 'application/pdf', final));
+  return { ok: true, nombre: final, url: f.getUrl() };
 }
