@@ -21,8 +21,8 @@ const mismoSector = (u, otro) => otro && u.sector === otro.sector;
 
 const PERMISOS = {
   // Asistencia
-  // Por ahora (mapa del 09/11/2026): cada uno ve solo la suya y Horacio ve la de todos.
-  verAsistenciaDe: (u, otro) => esDirector(u) || u.id === otro.id,
+  // Desde el 19/11/2026 la asistencia (horarios) la ve solo Horacio.
+  verAsistenciaDe: u => esDirector(u),
   exportarAsistencia: u => esDirector(u),
   aprobarCorreccion: u => esDirector(u),
 
