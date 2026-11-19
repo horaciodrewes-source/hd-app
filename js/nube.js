@@ -125,7 +125,7 @@ const NUBE = {
     lote.set(this.fs.doc('ajustes/valores'), limpio({ preciosActualizados: (local && local.preciosActualizados) || hoyISO() }));
     usuarios.forEach(u => lote.set(this.fs.doc('usuarios/' + u.id), limpio(u)));
     ((local && local.precios) || base.precios).forEach(p => lote.set(this.fs.doc('precios/' + p.id), limpio(p)));
-    lote.set(this.fs.doc('novedades/bienvenida'), { id: 'bienvenida', titulo: 'Bienvenidos a HD Interna', texto: 'Desde ahora todos vemos los mismos datos: fichajes, tareas, vacaciones y avisos.', autor: 'horacio', fecha: hoyISO() });
+    lote.set(this.fs.doc('novedades/bienvenida'), { id: 'bienvenida', titulo: 'Bienvenidos a HD Interna', texto: 'Desde ahora todos vemos los mismos datos: ubicaciones, tareas, vacaciones y avisos.', autor: 'horacio', fecha: hoyISO() });
     await lote.commit();
     for (const r of (local && local.recibos) || []) {
       try { await this.fs.doc('recibos/' + r.id).set(limpio(r)); } catch (e) { /* recibo muy grande: se vuelve a cargar */ }
